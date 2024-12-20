@@ -1,0 +1,40 @@
+{
+	"name": "inventory-management-services",
+	"version": "1.0.0",
+	"description": "This is my inventory management backend",
+	"main": "index.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"dev": "nodemon index",
+		"start": "node index.js"
+	},
+	"author": "rohit-soni",
+	"license": "ISC",
+	"dependencies": {
+		"axios": "^1.7.7",
+		"bcrypt": "^5.1.1",
+		"cors": "^2.8.5",
+		"crypto": "^1.0.1",
+		"dotenv": "^16.4.5",
+		"express": "^4.21.1",
+		"express-validator": "^7.2.0",
+		"helmet": "^8.0.0",
+		"jsonwebtoken": "^9.0.2",
+		"morgan": "^1.10.0",
+		"moment": "^2.29.4",
+		"moment-timezone": "^0.5.45",
+		"mongoose": "^7.4.3",
+		"multer": "^1.4.5-lts.1",
+		"express-async-handler": "^1.2.0",
+		"express-rate-limit": "^6.9.0",
+		"express-rate-limiter": "^1.3.1",
+		"bcryptjs": "^2.4.3",
+		"cookie-parser": "^1.4.6"
+	},
+	"devDependencies": {
+		"@eslint/js": "^9.15.0",
+		"eslint": "^9.15.0",
+		"globals": "^15.12.0",
+		"nodemon": "^3.1.7"
+	}
+}
