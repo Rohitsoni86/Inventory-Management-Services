@@ -5,6 +5,4 @@ router.get("/check", (req, res) => {
 	res.json({ message: "API is running!" });
 });
 
-// router.use("/user", require("./user"));
-
 module.exports = router;

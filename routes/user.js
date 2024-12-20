@@ -1,20 +1,20 @@
-// const express = require("express");
-// const {
-// 	registerOrganization,
-// 	getOneOrganization,
-// 	addOrganizationUser,
-// 	loginUser,
-// 	updateOrganizationStatus,
-// 	refresh,
-// 	produceMessageController,
-// 	getApiKey,
-// 	verifyUser,
-// } = require("../controllers/userControllers");
+const express = require("express");
+const {
+	registerOrganization,
+	// getOneOrganization,
+	// addOrganizationUser,
+	// loginUser,
+	// updateOrganizationStatus,
+	// refresh,
+	// produceMessageController,
+	// getApiKey,
+	// verifyUser,
+} = require("../controllers/userControllers");
 // const { authorizeUser } = require("../middleware/middleware");
 
-// const router = express.Router();
+const router = express.Router();
 
-// router.route("/organization").post(registerOrganization);
+router.route("/organization/add").post(registerOrganization);
 // router.route("/add").post(authorizeUser, addOrganizationUser);
 // router
 // 	.route("/organization/:id")
@@ -25,4 +25,4 @@
 // router.route("/refresh").get(refresh);
 // router.route("/produce").post(produceMessageController);
 // router.route("/product/key/:id").get(authorizeUser, getApiKey);
-// module.exports = router;
+module.exports = router;
