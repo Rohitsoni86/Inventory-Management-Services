@@ -1,14 +1,18 @@
 const express = require("express");
 const dotenv = require("dotenv");
-const apiRoutes = require("./routes/api.routes");
 const cors = require("cors");
 const morgan = require("morgan");
 const helmet = require("helmet");
 const connectDB = require("./config/db");
 const cookieParser = require("cookie-parser");
 dotenv.config();
+const apiRoutes = require("./routes/api.routes");
+const router = require("./routes/api.routes");
 
 const app = express();
+app.use(express.json());
+// Cookie parser
+app.use(cookieParser());
 
 app.use(
 	helmet({
@@ -33,7 +37,11 @@ app.use(
 );
 
 const corsOptions = {
-	origin: ["http://localhost:3000", "http://localhost:3001"],
+	origin: [
+		"http://localhost:3000",
+		"http://localhost:3001",
+		"http://localhost:4000",
+	],
 	methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 	allowedHeaders: [
 		"Content-Type",
@@ -47,9 +55,6 @@ const corsOptions = {
 	optionsSuccessStatus: 200,
 };
 app.use(cors(corsOptions));
-app.use(express.json());
-// Cookie parser
-app.use(cookieParser());
 
 morgan.token("reqBody", (req, res) => {
 	try {
@@ -74,6 +79,7 @@ morgan.token("request-headers", (req, res) => {
 		return req.headers;
 	}
 });
+
 const logFormat = (tokens, req, res) => {
 	const statusValue = tokens.status(req, res);
 	let statusString = `${statusValue} ❌`;
@@ -113,6 +119,15 @@ const startServer = async () => {
 	}
 };
 
+startServer();
+
 app.use("/api/v1", apiRoutes);
 
-startServer();
+// app.use((req, res, next) => {
+// 	res.status(404).json({ message: "Route not found" });
+// });
+
+// app.use((err, req, res, next) => {
+// 	console.error(err.stack);
+// 	res.status(500).json({ message: "Internal Server Error" });
+// });
