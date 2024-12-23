@@ -97,7 +97,7 @@ const logFormat = (tokens, req, res) => {
 			responseTime: `${tokens["response-time"](req, res)} ms`,
 			requestBody: tokens["reqBody"](req),
 			responseBody: tokens["resBody"](req, res),
-			_s: "——————————————————————————————————————————————————————————————————————————————————————————————————————————",
+			// _s: "——————————————————————————————————————————————————————————————————————————————————————————————————————————",
 		},
 		null,
 		2
