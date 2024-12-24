@@ -181,7 +181,7 @@ const createNewUser = asyncHandler(async (req, res, next) => {
 // 			req.secure ||
 // 			(isLocalhost && req.headers["x-forwarded-proto"] === "https");
 
-// 		res.cookie("jwt", refreshToken, {
+// 		res.cookie("refreshToken", refreshToken, {
 // 			httpOnly: true,
 // 			secure: true,
 // 			sameSite: isLocalhost ? "None" : "Strict",
@@ -319,7 +319,7 @@ const createNewUser = asyncHandler(async (req, res, next) => {
 // 				secure: true,
 // 			});
 // 			// Create secure cookie with refresh token
-// 			res.cookie("jwt", refreshToken, {
+// 			res.cookie("refreshToken", refreshToken, {
 // 				httpOnly: true, //accessible only by web server
 // 				secure: true, //https
 // 				sameSite: "None", //cross-site cookie
@@ -395,7 +395,7 @@ const createNewUser = asyncHandler(async (req, res, next) => {
 // 				req.headers.origin.includes("localhost:3000") ||
 // 				req.headers.origin.endsWith(".localhost:3000");
 
-// 			res.cookie("jwt", refreshToken, {
+// 			res.cookie("refreshToken", refreshToken, {
 // 				httpOnly: true,
 // 				secure: true,
 // 				sameSite: isLocalhost ? "None" : "Strict",

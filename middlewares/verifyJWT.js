@@ -21,7 +21,6 @@ const verifyJWT = (req, res, next) => {
 				console.log(err);
 				return res.status(403).json({ message: "Forbidden" });
 			}
-			// if(subDomain && (subDomain !== decoded.UserInfo.tname)) return res.status(403).json({ message: "Forbidden" });
 			req.user = decoded.UserInfo;
 			req.roles = decoded.UserInfo.roles;
 			next();

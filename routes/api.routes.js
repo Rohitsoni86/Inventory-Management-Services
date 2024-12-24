@@ -9,4 +9,7 @@ router.use("/user", require("./user"));
 
 router.use("/admin", require("./api.superAdmin.routes"));
 
+router.use("/employee", require("./api.employee.routes"));
+
+
 module.exports = router;

@@ -1,7 +1,7 @@
 const asyncHandler = require("express-async-handler");
 const bcryptjs = require("bcryptjs");
 const ErrorResponse = require("../utils/errorResponse");
-const superAdminUserModel = require("../models/superAdminModel");
+const EmployeeUserModel = require("../models/organizationEmployeesModel");
 const moment = require("moment");
 const crypto = require("crypto");
 const bcrypt = require("bcrypt");
@@ -15,8 +15,8 @@ const qrcode = require("qrcode");
 const jwt = require("jsonwebtoken");
 const logger = require("../middlewares/custom-logger");
 
-const createSuperAdmin = asyncHandler(async (req, res, next) => {
-	console.log("Create Super Admin Called", req.body);
+const createEmployee = asyncHandler(async (req, res, next) => {
+	console.log("Create Employee Called", req.body);
 	const {
 		name,
 		honorific,
@@ -28,11 +28,8 @@ const createSuperAdmin = asyncHandler(async (req, res, next) => {
 		phoneNo,
 		email,
 		active,
-		mfaEnabled,
-		mfaSecret,
 		// createdAt,
 		currentLocation,
-		organizations,
 		// refreshToken,
 	} = req.body;
 
@@ -77,15 +74,12 @@ const createSuperAdmin = asyncHandler(async (req, res, next) => {
 			alternatePhoneNo,
 			password: hashedPwd,
 			active,
-			mfaEnabled,
-			mfaSecret,
 			currentLocation,
-			organizations,
 			refreshToken: "",
 			createdAt: createdDate,
 		};
 
-		const superAdminUser = await superAdminUserModel.create(userObject);
+		const superAdminUser = await EmployeeUserModel.create(userObject);
 		console.log("Super Admin Created", superAdminUser);
 		if (superAdminUser) {
 			res.status(201).json({
@@ -108,7 +102,7 @@ const createSuperAdmin = asyncHandler(async (req, res, next) => {
 	}
 });
 
-const loginSuperAdmin = asyncHandler(async (req, res, next) => {
+const loginEmployee = asyncHandler(async (req, res, next) => {
 	const { email, password } = req.body;
 
 	if (!email || !password) {
@@ -116,7 +110,7 @@ const loginSuperAdmin = asyncHandler(async (req, res, next) => {
 	}
 	console.log("Founded Email Password", email, password);
 	try {
-		const foundUser = await superAdminUserModel.findOne({ email });
+		const foundUser = await EmployeeUserModel.findOne({ email });
 
 		if (!foundUser || foundUser.active === false) {
 			return next(new ErrorResponse("Invalid credentials", 401));
@@ -129,148 +123,157 @@ const loginSuperAdmin = asyncHandler(async (req, res, next) => {
 		if (!match) {
 			return res.status(401).json({ message: "Unauthorized" });
 		}
-
-		const temporarytoken = jwt.sign(
+		const accessToken = jwt.sign(
 			{
-				email: foundUser.email,
-				roles: foundUser.roles,
+				UserInfo: {
+					username: foundUser.email,
+					roles: foundUser.roles,
+					id: foundUser.id,
+				},
 			},
-			process.env.SUP_ADMIN_ACCESS_TOKEN_SECRET,
-			{ algorithm: "HS256", expiresIn: "5m" }
+			process.env.ACCESS_TOKEN_SECRET,
+			{ algorithm: "HS256", expiresIn: "60m" }
 		);
-		res.cookie("temporarytoken", temporarytoken, {
+
+		const refreshToken = jwt.sign(
+			{ email: foundUser.email, tname: req.params.hospitalId },
+			process.env.REFRESH_TOKEN_SECRET,
+			{ algorithm: "HS256", expiresIn: "1d" }
+		);
+
+		// Saving refreshToken with current user
+		foundUser.refreshToken = refreshToken;
+		const result = await foundUser.save();
+		const config = {
+			headers: {
+				Cookie: `accessToken=${accessToken}`,
+			},
+		};
+
+		res.cookie("accessToken", accessToken, {
 			httpOnly: true, //accessible only by web server
 			secure: true, //https
 			sameSite: "None", //cross-site cookie
-			maxAge: 5 * 60 * 1000,
+			maxAge: 7 * 24 * 60 * 60 * 1000,
 		});
-		if (foundUser.mfaEnabled && foundUser.mfaSecret) {
-			return res.status(200).json({
-				success: true,
-				data: { mfaEnabled: foundUser.mfaEnabled, secret: foundUser.mfaSecret },
-			});
-		} else {
-			const secret = speakeasy.generateSecret({ length: 20 });
-			console.log("MFA Not Found", secret);
-			const customURL = `otpauth://totp/${encodeURIComponent(
-				"Rohit"
-			)}:${encodeURIComponent(foundUser.name)}?secret=${
-				secret.base32
-			}&issuer=${encodeURIComponent("Rohit")}`;
-			qrcode.toDataURL(customURL, (err, data_url) => {
-				return res.status(200).json({
-					success: true,
-					data: {
-						mfaEnabled: foundUser.mfaEnabled,
-						secret: secret.base32,
-						qrcode: data_url,
-					},
-				});
-			});
-		}
+
+		// Create secure cookie with refresh token
+		const isLocalhost =
+			req.headers.origin &&
+			(req.headers.origin.includes("localhost:3000") ||
+				req.headers.origin.endsWith(".localhost:3000"));
+		const isSecure =
+			req.secure ||
+			(isLocalhost && req.headers["x-forwarded-proto"] === "https");
+
+		res.cookie("refreshToken", refreshToken, {
+			httpOnly: true,
+			secure: true,
+			sameSite: isLocalhost ? "None" : "Strict",
+			maxAge: 24 * 60 * 60 * 1000,
+		});
+
+		res.cookie("accessToken", accessToken, {
+			httpOnly: true, //accessible only by web server
+			secure: true,
+			sameSite: isLocalhost ? "None" : "Strict",
+			maxAge: 60 * 60 * 1000,
+		});
+
+		res.status(200).json({
+			success: true,
+			// roles,
+			accessToken,
+			refreshToken: refreshToken,
+			id: foundUser._id,
+			username: foundUser.name,
+			email: foundUser.email,
+		});
 	} catch (err) {
 		console.log("Catching Error", err);
 		return next(new ErrorResponse("Internal Server Error", 500));
 	}
 });
 
-const verifyMFA = asyncHandler(async (req, res, next) => {
-	const { code, secret } = req.body;
-	try {
-		const user = req.user;
-		const foundUser = await superAdminUserModel.findOne({ email: user.email });
-		if (foundUser.mfaEnabled && foundUser.mfaSecret !== secret) {
-			return res.status(400).json({ success: false, data: "Invalid Secret" });
-		}
-		const isValid = speakeasy.totp.verify({
-			secret,
-			encoding: "base32",
-			token: code,
-		});
-
-		if (isValid) {
-			const roles = foundUser.roles;
-			console.log(roles);
-
-			const accessToken = jwt.sign(
-				{
-					UserInfo: {
-						username: foundUser.email,
-						roles: foundUser.roles,
-						id: foundUser.id,
-					},
-				},
-				process.env.SUP_ADMIN_ACCESS_TOKEN_SECRET,
-				{ algorithm: "HS256", expiresIn: "60m" }
-			);
-
-			const refreshToken = jwt.sign(
-				{ email: foundUser.email },
-				process.env.REFRESH_TOKEN_SECRET,
-				{ algorithm: "HS256", expiresIn: "1d" }
-			);
-			// Saving refreshToken with current user
-			foundUser.refreshToken = refreshToken;
-			foundUser.mfaSecret = secret;
-			foundUser.mfaEnabled = true;
-			const result = await foundUser.save();
-			res.clearCookie("temporarytoken", {
-				httpOnly: true,
-				sameSite: "None",
-				secure: true,
-			});
-			// Create secure cookie with refresh token
-			res.cookie("refreshToken", refreshToken, {
-				httpOnly: true, //accessible only by web server
-				secure: true, //https
-				sameSite: "None", //cross-site cookie
-				maxAge: 7 * 24 * 60 * 60 * 1000, //cookie expiry: set to match rT
-			});
-
-			res.cookie("accessToken", accessToken, {
-				httpOnly: true, //accessible only by web server
-				secure: true, //https
-				sameSite: "None", //cross-site cookie
-				maxAge: 60 * 60 * 1000,
-			});
-
-			// Send accessToken containing username and roles
-			// Send authorization roles and access token to user
-			logger.info({ roles, accessToken, username: foundUser.name });
-			res.status(200).json({
-				success: true,
-				data: { name: foundUser.name, userId: foundUser._id },
-			});
-		} else {
-			res.status(400).json({ success: false, message: "Invalid code" });
-		}
-	} catch (error) {
-		console.log(error);
-		res.status(500).json({ success: false, data: "Something went wrong" });
-	}
-});
-
-// verify Super admin you need to make token different for both
-const verifySuperAdminAuth = asyncHandler(async (req, res, next) => {
+// verify Employee
+const verifyEmployee = asyncHandler(async (req, res, next) => {
 	const { id } = req.user;
 	const token = req.cookies.accessToken;
 	if (!token) {
 		return res.status(403).json({ success: false, data: "Invalid Token" });
 	}
 
-	const user = await superAdminUserModel.findById(id);
+	const user = await EmployeeUserModel.findById(id);
 	if (user.active == false) {
 		return res.status(401).json({ message: "USER BANNED" });
 	}
 	if (!user) {
 		return res.status(403).json({ error: "You must be logged In." });
 	}
+	const accessToken = jwt.sign(
+		{
+			UserInfo: {
+				username: foundUser.email,
+				roles: foundUser.roles,
+				id: foundUser.id,
+			},
+		},
+		process.env.ACCESS_TOKEN_SECRET,
+		{ algorithm: "HS256", expiresIn: "60m" }
+	);
+
+	const refreshToken = jwt.sign(
+		{ email: foundUser.email },
+		process.env.REFRESH_TOKEN_SECRET,
+		{ algorithm: "HS256", expiresIn: "1d" }
+	);
+
+	// Saving refreshToken with current user
+	foundUser.refreshToken = refreshToken;
+	const result = await foundUser.save();
+	const config = {
+		headers: {
+			Cookie: `accessToken=${accessToken}`,
+		},
+	};
+
+	res.cookie("accessToken", accessToken, {
+		httpOnly: true, //accessible only by web server
+		secure: true, //https
+		sameSite: "None", //cross-site cookie
+		maxAge: 7 * 24 * 60 * 60 * 1000,
+	});
+
+	// Create secure cookie with refresh token
+	const isLocalhost =
+		req.headers.origin &&
+		(req.headers.origin.includes("localhost:3000") ||
+			req.headers.origin.endsWith(".localhost:3000"));
+	const isSecure =
+		req.secure || (isLocalhost && req.headers["x-forwarded-proto"] === "https");
+
+	res.cookie("refreshToken", refreshToken, {
+		httpOnly: true,
+		secure: true,
+		sameSite: isLocalhost ? "None" : "Strict",
+		maxAge: 24 * 60 * 60 * 1000,
+	});
+
+	res.cookie("accessToken", accessToken, {
+		httpOnly: true, //accessible only by web server
+		secure: true,
+		sameSite: isLocalhost ? "None" : "Strict",
+		maxAge: 60 * 60 * 1000,
+	});
+
 	res.status(200).json({
-		data: "success",
-		id,
-		roles: req.user.roles,
-		username: user.name,
-		email: user.email,
+		success: true,
+		// roles,
+		accessToken,
+		refreshToken: refreshToken,
+		id: foundUser._id,
+		username: foundUser.name,
+		email: foundUser.email,
 	});
 });
 
@@ -346,9 +349,24 @@ const refresh = (req, res, next) => {
 						id: foundUser.id,
 					},
 				},
-				process.env.SUP_ADMIN_ACCESS_TOKEN_SECRET,
-				{ algorithm: "HS256", expiresIn: "15m" }
+				process.env.ACCESS_TOKEN_SECRET,
+				{ algorithm: "HS256", expiresIn: "60m" }
 			);
+
+			const refreshToken = jwt.sign(
+				{ email: foundUser.email, tname: req.params.hospitalId },
+				process.env.REFRESH_TOKEN_SECRET,
+				{ algorithm: "HS256", expiresIn: "1d" }
+			);
+
+			// Saving refreshToken with current user
+			foundUser.refreshToken = refreshToken;
+			const result = await foundUser.save();
+			const config = {
+				headers: {
+					Cookie: `accessToken=${accessToken}`,
+				},
+			};
 
 			res.cookie("accessToken", accessToken, {
 				httpOnly: true, //accessible only by web server
@@ -357,15 +375,45 @@ const refresh = (req, res, next) => {
 				maxAge: 7 * 24 * 60 * 60 * 1000,
 			});
 
-			res.json({ accessToken });
+			// Create secure cookie with refresh token
+			const isLocalhost =
+				req.headers.origin &&
+				(req.headers.origin.includes("localhost:3000") ||
+					req.headers.origin.endsWith(".localhost:3000"));
+			const isSecure =
+				req.secure ||
+				(isLocalhost && req.headers["x-forwarded-proto"] === "https");
+
+			res.cookie("refreshToken", refreshToken, {
+				httpOnly: true,
+				secure: true,
+				sameSite: isLocalhost ? "None" : "Strict",
+				maxAge: 24 * 60 * 60 * 1000,
+			});
+
+			res.cookie("accessToken", accessToken, {
+				httpOnly: true, //accessible only by web server
+				secure: true,
+				sameSite: isLocalhost ? "None" : "Strict",
+				maxAge: 60 * 60 * 1000,
+			});
+
+			res.status(200).json({
+				success: true,
+				// roles,
+				accessToken,
+				refreshToken: refreshToken,
+				id: foundUser._id,
+				username: foundUser.name,
+				email: foundUser.email,
+			});
 		})
 	);
 };
 
 module.exports = {
-	createSuperAdmin,
-	loginSuperAdmin,
-	verifyMFA,
+	createEmployee,
+	loginEmployee,
+	verifyEmployee,
 	refresh,
-	verifySuperAdminAuth,
 };
