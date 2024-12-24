@@ -1,6 +1,6 @@
 "use strict";
 var mongoose = require("mongoose");
-const { ROLES_LIST, GENDER } = require("../config/roles_list");
+const { ROLES_LIST, GENDER } = require("../config/otherDataConfigs");
 
 const superAdminUserSchema = new mongoose.Schema(
 	{
