@@ -7,6 +7,6 @@ router.get("/check", (req, res) => {
 
 router.use("/user", require("./user"));
 
-router.use("/super-admin", require("./api.superAdmin.routes"));
+router.use("/admin", require("./api.superAdmin.routes"));
 
 module.exports = router;
