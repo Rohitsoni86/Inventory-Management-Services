@@ -1,0 +1,18 @@
+const pino = require("pino");
+
+const logger = pino({
+	level: 'info',
+	transport: {
+		target: 'pino-pretty',
+		options: {
+			colorize: true,
+		},
+	},
+	formatters: {
+		level: (label) => {
+			return { level: label.toUpperCase() };
+		},
+	},
+});
+
+module.exports = logger;

@@ -15,10 +15,8 @@ superAdminRouter.post("/login", loginSuperAdmin);
 // Verify Super Admin
 superAdminRouter.post("/verifyMFA", verifyTemporaryToken, verifyMFA);
 // superAdminRouter.get("/refresh", refresh);
-// superAdminRouter.get("/verify/admin", verifySuperAdminAuth);
-
-// Verify Super Admin
 superAdminRouter.use(verifyJWT);
+superAdminRouter.get("/verify/admin", verifySuperAdminAuth);
 
 // Admin Actions Definitions
 

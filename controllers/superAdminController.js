@@ -13,6 +13,7 @@ const CryptoJS = require("crypto-js");
 const speakeasy = require("speakeasy");
 const qrcode = require("qrcode");
 const jwt = require("jsonwebtoken");
+const logger = require("../middlewares/custom-logger");
 
 const createSuperAdmin = asyncHandler(async (req, res, next) => {
 	console.log("Create Super Admin Called", req.body);
@@ -256,9 +257,8 @@ const verifySuperAdminAuth = asyncHandler(async (req, res, next) => {
 	if (!token) {
 		return res.status(403).json({ success: false, data: "Invalid Token" });
 	}
-	const { tenantDb, dbName } = req;
-	const TenantUserModel = tenantDb.model("TenantUser", tenantUserSchema);
-	const user = await TenantUserModel.findById(id);
+
+	const user = await superAdminUserModel.findById(id);
 	if (user.active == false) {
 		return res.status(401).json({ message: "USER BANNED" });
 	}
