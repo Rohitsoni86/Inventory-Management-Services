@@ -1,15 +1,18 @@
 const asyncHandler = require("express-async-handler");
 const bcryptjs = require("bcryptjs");
 const ErrorResponse = require("../utils/errorResponse");
-const superAdminUserModel = require("../models/superAdminModel.js");
+const superAdminUserModel = require("../models/superAdminModel");
 const moment = require("moment");
 const crypto = require("crypto");
 const bcrypt = require("bcrypt");
-const { default: mongoose } = require("mongoose");
+const mongoose = require("mongoose");
 const { default: axios } = require("axios");
 const dotenv = require("dotenv");
 dotenv.config({ path: "../config/config.env" });
 const CryptoJS = require("crypto-js");
+const speakeasy = require("speakeasy");
+const qrcode = require("qrcode");
+const jwt = require("jsonwebtoken");
 
 const createSuperAdmin = asyncHandler(async (req, res, next) => {
 	console.log("Create Super Admin Called", req.body);
@@ -19,7 +22,10 @@ const createSuperAdmin = asyncHandler(async (req, res, next) => {
 		gender,
 		roles,
 		alternatePhoneNo,
-		credentials,
+		// credentials,
+		password,
+		phoneNo,
+		email,
 		active,
 		mfaEnabled,
 		mfaSecret,
@@ -33,61 +39,70 @@ const createSuperAdmin = asyncHandler(async (req, res, next) => {
 
 	try {
 		// Decrypt credentials
-		const decryptedBytes = CryptoJS.AES.decrypt(credentials, encryptionKey);
-		const decryptedData = decryptedBytes.toString(CryptoJS.enc.Utf8);
+		// const decryptedBytes = CryptoJS.AES.decrypt(credentials, encryptionKey);
+		// const decryptedData = decryptedBytes.toString(CryptoJS.enc.Utf8);
 
 		// Check if the decrypted data is valid JSON
-		if (decryptedData) {
-			let parsedCredentials;
-			try {
-				parsedCredentials = JSON.parse(decryptedData); // Parse the decrypted data
-			} catch (err) {
-				return next(
-					new ErrorResponse("Failed to parse decrypted credentials", 400)
-				);
-			}
+		// if (decryptedData) {
+		// 	let parsedCredentials;
+		// 	try {
+		// 		parsedCredentials = JSON.parse(decryptedData); // Parse the decrypted data
+		// 	} catch (err) {
+		// 		return next(
+		// 			new ErrorResponse("Failed to parse decrypted credentials", 400)
+		// 		);
+		// 	}
 
-			const { password, phoneNo, email } = parsedCredentials;
+		// 	const { password, phoneNo, email } = parsedCredentials;
 
-			// Validate the parsed credentials
-			if (!phoneNo || !password || !Array.isArray(roles) || !roles.length) {
-				return next(new ErrorResponse(`All fields are required`, 400));
-			}
+		// }
 
-			// Hash password
-			const hashedPwd = await bcryptjs.hash(password, 10); // salt rounds
-			const createdDate = moment(new Date()).format("YYYY-MM-DD hh:mm:ss");
+		// Validate the parsed credentials
+		if (!phoneNo || !password || !Array.isArray(roles) || !roles.length) {
+			return next(new ErrorResponse(`All fields are required`, 400));
+		}
 
-			const userObject = {
-				name,
-				email,
-				honorific,
-				gender,
-				phoneNo,
-				roles,
-				alternatePhoneNo,
-				password: hashedPwd,
-				active,
-				mfaEnabled,
-				mfaSecret,
-				currentLocation,
-				organizations,
-				refreshToken: "",
-				createdAt: createdDate,
-			};
+		// Hash password
+		const hashedPwd = await bcryptjs.hash(password, 10); // salt rounds
+		const createdDate = moment(new Date()).format("YYYY-MM-DD hh:mm:ss");
 
-			// Save the user to the database (uncomment the line below to actually save it)
-			// const organization = await TenantUserModel.create(userObject);
+		const userObject = {
+			name,
+			email,
+			honorific,
+			gender,
+			phoneNo,
+			roles,
+			alternatePhoneNo,
+			password: hashedPwd,
+			active,
+			mfaEnabled,
+			mfaSecret,
+			currentLocation,
+			organizations,
+			refreshToken: "",
+			createdAt: createdDate,
+		};
 
+		const superAdminUser = await superAdminUserModel.create(userObject);
+		console.log("Super Admin Created", superAdminUser);
+		if (superAdminUser) {
 			res.status(201).json({
 				success: true,
 				data: userObject,
 				message: `Registration Successful !`,
 			});
 		} else {
-			return next(new ErrorResponse("Decrypted data is empty or invalid", 400));
+			return next(new ErrorResponse("Error processing the request", 500));
 		}
 	} catch (err) {
+		//  else {
+		// 	return next(new ErrorResponse("Decrypted data is empty or invalid", 400));
+		// }
+		// }
+
+		console.log("Error", err);
+
 		return next(new ErrorResponse("Error processing the request", 500));
 	}
 });
@@ -98,18 +113,22 @@ const loginSuperAdmin = asyncHandler(async (req, res, next) => {
 	if (!email || !password) {
 		return res.status(400).json({ message: "All fields are required" });
 	}
-
+	console.log("Founded Email Password", email, password);
 	try {
-		const foundUser = await User.findOne({ email }).select("+password");
+		const foundUser = await superAdminUserModel.findOne({ email });
 
-		if (!foundUser || !foundUser.active) {
+		if (!foundUser || foundUser.active === false) {
 			return next(new ErrorResponse("Invalid credentials", 401));
 		}
 
-		console.log(foundUser);
+		console.log("Founded User", foundUser);
 		const match = await bcryptjs.compare(password, foundUser.password);
+		console.log("Match Password", match);
 
-		if (!match) return res.status(401).json({ message: "Unauthorized" });
+		if (!match) {
+			return res.status(401).json({ message: "Unauthorized" });
+		}
+
 		const temporarytoken = jwt.sign(
 			{
 				email: foundUser.email,
@@ -131,7 +150,7 @@ const loginSuperAdmin = asyncHandler(async (req, res, next) => {
 			});
 		} else {
 			const secret = speakeasy.generateSecret({ length: 20 });
-
+			console.log("MFA Not Found", secret);
 			const customURL = `otpauth://totp/${encodeURIComponent(
 				"Rohit"
 			)}:${encodeURIComponent(foundUser.name)}?secret=${
@@ -149,7 +168,8 @@ const loginSuperAdmin = asyncHandler(async (req, res, next) => {
 			});
 		}
 	} catch (err) {
-		return next(new ErrorResponse("Invalid credentials", 401));
+		console.log("Catching Error", err);
+		return next(new ErrorResponse("Internal Server Error", 500));
 	}
 });
 
@@ -157,7 +177,7 @@ const verifyMFA = asyncHandler(async (req, res, next) => {
 	const { code, secret } = req.body;
 	try {
 		const user = req.user;
-		const foundUser = await User.findOne({ email: user.email });
+		const foundUser = await superAdminUserModel.findOne({ email: user.email });
 		if (foundUser.mfaEnabled && foundUser.mfaSecret !== secret) {
 			return res.status(400).json({ success: false, data: "Invalid Secret" });
 		}

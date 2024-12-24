@@ -14,8 +14,8 @@ superAdminRouter.post("/create", createSuperAdmin);
 superAdminRouter.post("/login", loginSuperAdmin);
 // Verify Super Admin
 superAdminRouter.post("/verifyMFA", verifyTemporaryToken, verifyMFA);
-superAdminRouter.get("/refresh", refresh);
-superAdminRouter.get("/verify/admin", verifySuperAdminAuth);
+// superAdminRouter.get("/refresh", refresh);
+// superAdminRouter.get("/verify/admin", verifySuperAdminAuth);
 
 // Verify Super Admin
 superAdminRouter.use(verifyJWT);

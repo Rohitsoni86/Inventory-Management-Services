@@ -73,8 +73,9 @@ const superAdminUserSchema = new mongoose.Schema(
 	{ versionKey: false }
 );
 
-const superAdminUserModel = mongoose.model("AdminDB", superAdminUserSchema);
+const superAdminUserModel = mongoose.model(
+	"superAdminUser",
+	superAdminUserSchema
+);
 
-module.exports = {
-	superAdminUserModel,
-};
+module.exports = superAdminUserModel;
