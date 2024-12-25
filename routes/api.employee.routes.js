@@ -14,7 +14,7 @@ employeeRouter.post("/login", loginEmployee);
 // Verify Super Admin
 employeeRouter.post("/verify", verifyEmployee);
 // employeeRouter.get("/refresh", refresh);
-employeeRouter.use(verifyOrganizationJWT);
+// employeeRouter.use(verifyOrganizationJWT);
 
 // Organization Actions Definitions
 

@@ -1,7 +1,8 @@
 const asyncHandler = require("express-async-handler");
 const bcryptjs = require("bcryptjs");
 const ErrorResponse = require("../utils/errorResponse");
-// const { tenantUserSchema } = require("../models/TenantUser");
+const OrganizationAdminModel = require("../models/organizationAdminModel");
+const Organization = require("../models/organizationModel");
 const moment = require("moment");
 const crypto = require("crypto");
 const bcrypt = require("bcrypt");
@@ -10,8 +11,8 @@ const { default: axios } = require("axios");
 const dotenv = require("dotenv");
 dotenv.config({ path: "../config/config.env" });
 const CryptoJS = require("crypto-js");
-// const Tenants = require("../models/Tenants");
-// const connectDB = require("./config/db");
+const jwt = require("jsonwebtoken");
+const logger = require("../middlewares/custom-logger");
 
 const createNewUser = asyncHandler(async (req, res, next) => {
 	const {
@@ -32,181 +33,168 @@ const createNewUser = asyncHandler(async (req, res, next) => {
 		adminEmail,
 		adminCountryCode,
 		adminPhone,
-		credentials, // Encrypted credentials
+		adminPassword,
+		credentials,
 		adminFlagCode,
 		roles,
+		active,
 	} = req.body;
 
-	const encryptionKey = "rohit-soni-86";
-
 	try {
-		// Decrypt credentials
-		const decryptedBytes = CryptoJS.AES.decrypt(credentials, encryptionKey);
-		const decryptedData = decryptedBytes.toString(CryptoJS.enc.Utf8);
+		// Hash password
+		const hashedPwd = await bcryptjs.hash(adminPassword, 10); // salt rounds
+		const createdDate = new Date();
 
-		// Check if the decrypted data is valid JSON
-		if (decryptedData) {
-			let parsedCredentials;
-			try {
-				parsedCredentials = JSON.parse(decryptedData); // Parse the decrypted data
-			} catch (err) {
-				return next(
-					new ErrorResponse("Failed to parse decrypted credentials", 400)
-				);
-			}
+		// Create admin document
+		const admin = new OrganizationAdminModel({
+			adminFirstName,
+			adminLastName,
+			adminEmail,
+			adminCountryCode,
+			adminPhone,
+			adminPassword: hashedPwd,
+			credentials,
+			adminFlagCode,
+			roles,
+			active,
+			createdAt: createdDate,
+		});
+		await admin.save();
 
-			const { adminPassword, adminPhone } = parsedCredentials;
+		// Create organization document
+		const organization = new Organization({
+			legalName,
+			registrationNumber,
+			email,
+			countryCode,
+			phone,
+			address,
+			city,
+			state,
+			country,
+			postalCode,
+			companySize,
+			flagCode,
+			createdAt: createdDate,
+			createdBy: admin._id,
+			admins: [admin._id],
+			active,
+		});
+		await organization.save();
 
-			// Validate the parsed credentials
-			if (
-				!adminPhone ||
-				!adminPassword ||
-				!Array.isArray(roles) ||
-				!roles.length
-			) {
-				return next(new ErrorResponse(`All fields are required`, 400));
-			}
+		// Update admin document to include the organization
+		admin.organizations.push(organization._id);
+		await admin.save();
 
-			// Hash password
-			const hashedPwd = await bcryptjs.hash(adminPassword, 10); // salt rounds
-			const createdDate = moment(new Date()).format("YYYY-MM-DD hh:mm:ss");
-
-			const userObject = {
-				legalName,
-				registrationNumber,
-				email,
-				countryCode,
-				phone,
-				address,
-				city,
-				state,
-				country,
-				postalCode,
-				companySize,
-				flagCode,
-				adminFirstName,
-				adminLastName,
-				adminEmail,
-				adminCountryCode,
-				adminPhone,
-				adminPassword: hashedPwd,
-				adminFlagCode,
-				roles,
-				createdAt: createdDate,
-			};
-
-			// Save the user to the database (uncomment the line below to actually save it)
-			// const organization = await TenantUserModel.create(userObject);
-
-			res.status(201).json({
-				success: true,
-				data: userObject,
-				message: `Registration Successful !`,
-			});
-		} else {
-			return next(new ErrorResponse("Decrypted data is empty or invalid", 400));
-		}
+		res.status(201).json({
+			success: true,
+			data: {
+				admin,
+				organization,
+			},
+			message: "Registration Successful!",
+		});
 	} catch (err) {
+		console.error("Error creating admin and organization:", err);
 		return next(new ErrorResponse("Error processing the request", 500));
 	}
 });
 
-//this login is for user only
-// const login = asyncHandler(async (req, res, next) => {
-// 	console.log("login called");
-// 	const { credentials } = req.body;
-// 	const encryptionKey = "rohit-soni-86";
-// 	const decryptedBytes = CryptoJS.AES.decrypt(credentials, encryptionKey);
-// 	const decryptedData = decryptedBytes.toString(CryptoJS.enc.Utf8);
-// 	const { email, password } = JSON.parse(decryptedData);
-// 	// Now `decryptedData` contains the original data
-// 	const tenantDbName = req.params.hospitalId;
-// 	const { tenantDb } = req;
-// 	if (!email || !password || !tenantDbName) {
-// 		return res.status(400).json({ message: "All fields are required" });
-// 	}
+const loginAdmin = asyncHandler(async (req, res, next) => {
+	console.log("login called");
+	const { email, password } = req.body;
+	const encryptionKey = "rohit-soni-86";
+	// const decryptedBytes = CryptoJS.AES.decrypt(credentials, encryptionKey);
+	// const decryptedData = decryptedBytes.toString(CryptoJS.enc.Utf8);
+	// const { email, password } = JSON.parse(decryptedData);
+	// Now `decryptedData` contains the original data
+	// const tenantDbName = req.params.hospitalId;
+	// const { tenantDb } = req;
 
-// 	// Access the TenantUser model from the tenantDbConnection
-// 	const TenantUserModel = tenantDb.model("TenantUser", tenantUserSchema);
-// 	try {
-// 		const foundUser = await TenantUserModel.findOne({
-// 			$or: [
-// 				{
-// 					email: email,
-// 				},
-// 				{ phoneNo: email },
-// 			],
-// 		}).select("+password");
-// 		// console.log(foundUser);
+	if (!email || !password) {
+		return res.status(400).json({ message: "All fields are required" });
+	}
 
-// 		if (!foundUser || !foundUser.active) {
-// 			return next(new ErrorResponse("Invalid credentials", 401));
-// 		}
+	try {
+		const foundUser = await OrganizationAdminModel.findOne({
+			adminEmail: email,
+		}).select("+password");
+		// .populate({
+		// 	path: "organizations",
+		// 	select: "legalName email phone address city state country", // Fields to include in the populated data
+		// }); // Populate the organizations;
+		console.log("Found Admin", foundUser);
 
-// 		// console.log(foundUser);
-// 		const match = await bcryptjs.compare(password, foundUser.password);
+		const organizationsDetails = await Organization.findOne(
+			foundUser.organizations[0]
+		);
 
-// 		if (!match) return res.status(401).json({ message: "Unauthorized User" });
-// 		const roles = foundUser.roles;
+		if (!foundUser || !foundUser.active) {
+			return next(new ErrorResponse("Invalid credentials", 401));
+		}
 
-// 		const accessToken = jwt.sign(
-// 			{
-// 				UserInfo: {
-// 					username: foundUser.email,
-// 					roles: foundUser.roles,
-// 					id: foundUser.id,
-// 					tname: req.params.hospitalId,
-// 				},
-// 			},
-// 			process.env.ACCESS_TOKEN_SECRET,
-// 			{ algorithm: "HS256", expiresIn: "60m" }
-// 		);
+		// console.log(foundUser);
+		const match = await bcryptjs.compare(password, foundUser.adminPassword);
 
-// 		const refreshToken = jwt.sign(
-// 			{ email: foundUser.email, tname: req.params.hospitalId },
-// 			process.env.REFRESH_TOKEN_SECRET,
-// 			{ algorithm: "HS256", expiresIn: "1d" }
-// 		);
-// 		// Saving refreshToken with current user
-// 		foundUser.refreshToken = refreshToken;
-// 		const result = await foundUser.save();
+		if (!match) return res.status(401).json({ message: "Unauthorized User" });
+		const roles = foundUser.roles;
 
-// 		// Create secure cookie with refresh token
-// 		console.log();
-// 		const isLocalhost =
-// 			req.headers.origin &&
-// 			(req.headers.origin.includes("localhost:3000") ||
-// 				req.headers.origin.endsWith(".localhost:3000"));
-// 		const isSecure =
-// 			req.secure ||
-// 			(isLocalhost && req.headers["x-forwarded-proto"] === "https");
+		const accessToken = jwt.sign(
+			{
+				UserInfo: {
+					username: foundUser.adminEmail,
+					roles: foundUser.roles,
+					id: foundUser.id,
+				},
+			},
+			process.env.ACCESS_TOKEN_SECRET,
+			{ algorithm: "HS256", expiresIn: "60m" }
+		);
 
-// 		res.cookie("refreshToken", refreshToken, {
-// 			httpOnly: true,
-// 			secure: true,
-// 			sameSite: isLocalhost ? "None" : "Strict",
-// 			maxAge: 24 * 60 * 60 * 1000,
-// 		});
+		const refreshToken = jwt.sign(
+			{ email: foundUser.email },
+			process.env.REFRESH_TOKEN_SECRET,
+			{ algorithm: "HS256", expiresIn: "1d" }
+		);
 
-// 		res.cookie("accessToken", accessToken, {
-// 			httpOnly: true, //accessible only by web server
-// 			secure: true,
-// 			sameSite: isLocalhost ? "None" : "Strict",
-// 			maxAge: 60 * 60 * 1000,
-// 		});
-// 		res.json({
-// 			roles,
-// 			accessToken,
-// 			username: foundUser.name,
-// 			email: foundUser.email,
-// 			allowedAccess: foundUser.allowedAccess,
-// 			reorder: foundUser.reorders,
-// 		});
-// 	} catch (error) {
-// 		return next(new ErrorResponse("Invalid credentials", 401));
-// 	} // Send accessToken containing username and roles
-// 	// Send authorization roles and access token to user
-// });
+		// Saving refreshToken with current user
+		// foundUser.refreshToken = refreshToken;
+		// const result = await foundUser.save();
+
+		// Create secure cookie with refresh token
+		const isLocalhost =
+			req.headers.origin &&
+			(req.headers.origin.includes("localhost:3000") ||
+				req.headers.origin.endsWith(".localhost:3000"));
+		const isSecure =
+			req.secure ||
+			(isLocalhost && req.headers["x-forwarded-proto"] === "https");
+
+		res.cookie("refreshToken", refreshToken, {
+			httpOnly: true,
+			secure: true,
+			sameSite: isLocalhost ? "None" : "Strict",
+			maxAge: 24 * 60 * 60 * 1000,
+		});
+
+		res.cookie("accessToken", accessToken, {
+			httpOnly: true, //accessible only by web server
+			secure: true,
+			sameSite: isLocalhost ? "None" : "Strict",
+			maxAge: 60 * 60 * 1000,
+		});
+		res.json({
+			roles,
+			accessToken,
+			username: `${foundUser.adminFirstName + foundUser.adminLastName}`,
+			email: foundUser.adminEmail,
+			organizationDetails: { ...organizationsDetails },
+		});
+	} catch (error) {
+		console.log("Login Admin Error", error);
+		return next(new ErrorResponse("Invalid credentials", 401));
+	}
+});
 
 // @desc Login
 // @route POST /auth
@@ -470,4 +458,5 @@ const createNewUser = asyncHandler(async (req, res, next) => {
 
 module.exports = {
 	createNewUser,
+	loginAdmin,
 };
