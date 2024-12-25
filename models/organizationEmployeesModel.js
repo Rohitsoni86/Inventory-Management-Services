@@ -34,6 +34,13 @@ const EmployeeUserSchema = new mongoose.Schema(
 			enum: Object.values(ROLES_LIST),
 			required: true,
 		},
+		mfaEnabled: {
+			type: Boolean,
+			default: false,
+		},
+		mfaSecret: {
+			type: String,
+		},
 		alternatePhoneNo: {
 			type: String,
 			trim: true,
@@ -58,14 +65,17 @@ const EmployeeUserSchema = new mongoose.Schema(
 		organizations: [
 			{
 				type: mongoose.Schema.Types.ObjectId,
-				ref: "organizations",
+				ref: "Organization",
 			},
 		],
 		refreshToken: String,
 	},
+	{
+		timestamps: true, // If you want automatic timestamps for createdAt and updatedAt
+	},
 	{ versionKey: false }
 );
 
-const EmployeeUserModel = mongoose.model("Employees", EmployeeUserSchema);
+const EmployeeUserModel = mongoose.model("Employee", EmployeeUserSchema);
 
 module.exports = EmployeeUserModel;

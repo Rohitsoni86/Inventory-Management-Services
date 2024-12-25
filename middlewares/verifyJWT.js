@@ -47,6 +47,25 @@ const verifyTemporaryToken = (req, res, next) => {
 	);
 };
 
+const verifyUserTemporaryToken = (req, res, next) => {
+	const token = req.cookies.temporarytoken;
+	if (!token) {
+		return next(new ErrorResponse("Not authorized to access this route", 401));
+	}
+
+	jwt.verify(
+		token,
+		process.env.ACCESS_TOKEN_SECRET,
+		{ algorithms: ["HS256"] },
+		(err, decoded) => {
+			console.log(err);
+			if (err) return res.status(403).json({ message: "Forbidden" });
+			req.user = decoded;
+			next();
+		}
+	);
+};
+
 // Other Users
 const verifyOrganizationJWT = (req, res, next) => {
 	const token = req.cookies.accessToken;
@@ -74,4 +93,9 @@ const verifyOrganizationJWT = (req, res, next) => {
 	);
 };
 
-module.exports = { verifyJWT, verifyTemporaryToken, verifyOrganizationJWT };
+module.exports = {
+	verifyJWT,
+	verifyTemporaryToken,
+	verifyOrganizationJWT,
+	verifyUserTemporaryToken,
+};

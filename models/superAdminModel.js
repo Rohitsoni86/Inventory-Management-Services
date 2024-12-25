@@ -70,6 +70,9 @@ const superAdminUserSchema = new mongoose.Schema(
 		],
 		refreshToken: String,
 	},
+	{
+		timestamps: true, // If you want automatic timestamps for createdAt and updatedAt
+	},
 	{ versionKey: false }
 );
 
