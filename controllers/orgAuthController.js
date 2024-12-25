@@ -217,7 +217,7 @@ const verifyUserMFA = asyncHandler(async (req, res, next) => {
 		if (user.roles.includes("admin")) {
 			foundUser = await OrganizationAdminModel.findOne({
 				adminEmail: user.email,
-			});
+			}).populate("organizations");
 			isAdmin = true;
 		}
 
@@ -312,7 +312,7 @@ const verifyUserMFA = asyncHandler(async (req, res, next) => {
 			res.status(400).json({ success: false, message: "Invalid MFA code" });
 		}
 	} catch (error) {
-		console.error(error);
+		console.error("Error User Verification", error);
 		res.status(500).json({ success: false, message: "Something went wrong" });
 	}
 });
