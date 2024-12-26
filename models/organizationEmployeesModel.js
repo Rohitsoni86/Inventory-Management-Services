@@ -40,6 +40,7 @@ const EmployeeUserSchema = new mongoose.Schema(
 		},
 		mfaSecret: {
 			type: String,
+			default: "",
 		},
 		alternatePhoneNo: {
 			type: String,

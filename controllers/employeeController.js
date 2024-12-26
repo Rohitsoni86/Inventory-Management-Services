@@ -30,6 +30,7 @@ const createEmployee = asyncHandler(async (req, res, next) => {
 		active,
 		// createdAt,
 		currentLocation,
+		organizations,
 		// refreshToken,
 	} = req.body;
 
@@ -74,28 +75,26 @@ const createEmployee = asyncHandler(async (req, res, next) => {
 			alternatePhoneNo,
 			password: hashedPwd,
 			active,
+			mfaEnabled: false,
+			mfaSecret: "",
 			currentLocation,
+			organizations,
 			refreshToken: "",
 			createdAt: createdDate,
 		};
 
-		const superAdminUser = await EmployeeUserModel.create(userObject);
-		console.log("Super Admin Created", superAdminUser);
-		if (superAdminUser) {
+		const empUser = await EmployeeUserModel.create(userObject);
+		console.log("Employee Created", empUser);
+		if (empUser) {
 			res.status(201).json({
 				success: true,
 				data: userObject,
-				message: `Registration Successful !`,
+				message: `Employee Created !`,
 			});
 		} else {
 			return next(new ErrorResponse("Error processing the request", 500));
 		}
 	} catch (err) {
-		//  else {
-		// 	return next(new ErrorResponse("Decrypted data is empty or invalid", 400));
-		// }
-		// }
-
 		console.log("Error", err);
 
 		return next(new ErrorResponse("Error processing the request", 500));

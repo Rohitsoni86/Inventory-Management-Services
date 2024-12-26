@@ -68,6 +68,7 @@ const organizationAdminSchema = new Schema(
 		},
 		mfaSecret: {
 			type: String,
+			default: "",
 		},
 		adminPassword: {
 			type: String,

@@ -13,7 +13,7 @@ const {
 
 const userRouter = express.Router();
 
-userRouter.route("/organization/add").post(loginUser);
+userRouter.route("/organization/add").post(createNewUser);
 
 // authentication
 
@@ -25,6 +25,6 @@ userRouter.post(
 );
 
 userRouter.use(verifyOrganizationJWT);
-userRouter.post("/organization/verify", verifyUserAuth);
+userRouter.get("/organization/verify", verifyUserAuth);
 
 module.exports = userRouter;

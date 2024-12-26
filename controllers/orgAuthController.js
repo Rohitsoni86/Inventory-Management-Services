@@ -25,14 +25,15 @@ const loginUser = asyncHandler(async (req, res, next) => {
 	}
 	console.log("Founded Email Password", email, password);
 	try {
-		const foundAdminUser = await OrganizationAdminModel.findOne({ email });
+		const foundAdminUser = await OrganizationAdminModel.findOne({
+			adminEmail: email,
+		});
 		const foundEmpUser = await EmployeeUserModel.findOne({ email });
+		console.log("Founded User", foundAdminUser, foundEmpUser);
 
 		if (
-			!foundAdminUser ||
-			!foundEmpUser ||
-			foundAdminUser.active === false ||
-			foundEmpUser.active === false
+			(!foundAdminUser || foundAdminUser.active === false) &&
+			(!foundEmpUser || foundEmpUser.active === false)
 		) {
 			return next(new ErrorResponse("Invalid credentials", 401));
 		}
@@ -47,6 +48,17 @@ const loginUser = asyncHandler(async (req, res, next) => {
 		if (!match) {
 			return res.status(401).json({ message: "Unauthorized" });
 		}
+
+		// const temporarytoken = jwt.sign(
+		// {
+		// 	email: foundAdminUser
+		// 		? foundAdminUser.adminEmail
+		// 		: foundEmpUser.password,
+		// 	roles: foundAdminUser ? foundAdminUser.roles : foundEmpUser.roles,
+		// },
+		// 	process.env.ACCESS_TOKEN_SECRET,
+		// 	{ algorithm: "HS256", expiresIn: "5m" }
+		// );
 
 		const temporarytoken = jwt.sign(
 			{
@@ -64,10 +76,15 @@ const loginUser = asyncHandler(async (req, res, next) => {
 			sameSite: "None", //cross-site cookie
 			maxAge: 5 * 60 * 1000,
 		});
-		if (
-			(foundAdminUser.mfaEnabled && foundAdminUser.mfaSecret) ||
-			(foundEmpUser.mfaEnabled && foundEmpUser.mfaEnabled)
-		) {
+		if (foundAdminUser && foundAdminUser.mfaEnabled) {
+			return res.status(200).json({
+				success: true,
+				data: {
+					mfaEnabled: foundAdminUser.mfaEnabled,
+					secret: foundAdminUser.mfaSecret,
+				},
+			});
+		} else if (foundEmpUser && foundEmpUser.mfaEnabled) {
 			return res.status(200).json({
 				success: true,
 				data: {
@@ -224,7 +241,7 @@ const verifyUserMFA = asyncHandler(async (req, res, next) => {
 		if (user.roles.includes("employee")) {
 			foundUser = await EmployeeUserModel.findOne({
 				email: user.email,
-			});
+			}).populate("organizations");
 			isAdmin = false;
 		}
 
@@ -398,7 +415,10 @@ const verifyUserAuth = asyncHandler(async (req, res, next) => {
 
 	// Check if the user is an Admin
 	if (req.user.roles.includes("admin")) {
-		user = await OrganizationAdminModel.findById(id); // Use Admin model
+		user = await OrganizationAdminModel.findById(id).populate(
+			"organization",
+			"legalName"
+		); // Use Admin model
 		isAdmin = true; // Mark as Admin
 	}
 

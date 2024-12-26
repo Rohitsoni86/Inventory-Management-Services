@@ -8,8 +8,6 @@ const {
 const { verifyJWT } = require("../middlewares/verifyJWT");
 const employeeRouter = express.Router();
 
-// Create New Super Admin
-employeeRouter.post("/create", createEmployee);
 employeeRouter.post("/login", loginEmployee);
 // Verify Super Admin
 employeeRouter.post("/verify", verifyEmployee);
