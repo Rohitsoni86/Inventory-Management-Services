@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 const Schema = mongoose.Schema;
 const { ROLES_LIST, GENDER } = require("../config/otherDataConfigs");
 
-const organizationAdminSchema = new Schema(
+const organizationAdminSchema = new mongoose.Schema(
 	{
 		adminFirstName: {
 			type: String,

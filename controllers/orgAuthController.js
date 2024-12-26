@@ -49,17 +49,6 @@ const loginUser = asyncHandler(async (req, res, next) => {
 			return res.status(401).json({ message: "Unauthorized" });
 		}
 
-		// const temporarytoken = jwt.sign(
-		// {
-		// 	email: foundAdminUser
-		// 		? foundAdminUser.adminEmail
-		// 		: foundEmpUser.password,
-		// 	roles: foundAdminUser ? foundAdminUser.roles : foundEmpUser.roles,
-		// },
-		// 	process.env.ACCESS_TOKEN_SECRET,
-		// 	{ algorithm: "HS256", expiresIn: "5m" }
-		// );
-
 		const temporarytoken = jwt.sign(
 			{
 				email: foundAdminUser ? foundAdminUser.adminEmail : foundEmpUser.email,
@@ -415,7 +404,7 @@ const verifyUserAuth = asyncHandler(async (req, res, next) => {
 	// Check if the user is an Admin
 	if (req.user.roles.includes("admin")) {
 		user = await OrganizationAdminModel.findById(id).populate(
-			"organization",
+			"organizations",
 			"legalName"
 		); // Use Admin model
 		isAdmin = true; // Mark as Admin
@@ -449,6 +438,7 @@ const verifyUserAuth = asyncHandler(async (req, res, next) => {
 			? `${user.adminFirstName + user.adminLastName}`
 			: user.name,
 		email: isAdmin ? user.adminEmail : user.email,
+		organizationDetails: user.organizations,
 	});
 });
 
