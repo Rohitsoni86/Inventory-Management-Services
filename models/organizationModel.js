@@ -131,6 +131,9 @@ const organizationSchema = new mongoose.Schema(
 				ref: "Customer",
 			},
 		],
+		measuringUnits: [String],
+		productsCategories: [String],
+		brands: [String],
 	},
 	{
 		timestamps: true,
