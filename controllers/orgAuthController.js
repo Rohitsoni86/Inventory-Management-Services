@@ -62,9 +62,7 @@ const loginUser = asyncHandler(async (req, res, next) => {
 
 		const temporarytoken = jwt.sign(
 			{
-				email: foundAdminUser
-					? foundAdminUser.adminEmail
-					: foundEmpUser.password,
+				email: foundAdminUser ? foundAdminUser.adminEmail : foundEmpUser.email,
 				roles: foundAdminUser ? foundAdminUser.roles : foundEmpUser.roles,
 			},
 			process.env.ACCESS_TOKEN_SECRET,
@@ -229,6 +227,7 @@ const verifyUserMFA = asyncHandler(async (req, res, next) => {
 		const user = req.user;
 		let foundUser;
 		let isAdmin = false;
+		console.log("User Req", user);
 
 		// Check for roles and fetch user data
 		if (user.roles.includes("admin")) {
