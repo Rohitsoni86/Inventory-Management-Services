@@ -1,35 +1,67 @@
-const ErrorResponse = require('../utils/errorResponse');
+const ErrorResponse = require("../utils/errorResponse");
 
 const errorHandler = (err, req, res, next) => {
-  let error = { ...err };
+	let error = { ...err };
+	error.message = err.message;
 
-  error.message = err.message;
+	// Default fallback values
+	let statusCode = error.statusCode || 500;
+	let message = error.message || "Internal Server Error";
+	let errors = error.errors || null;
 
-  // Log to console for dev
-  console.log(err);
+	// Log the full error for debugging
+	console.error("[Error Handler] ➤", err);
 
-  // Mongoose bad ObjectId
-  if (err.name === 'CastError') {
-    const message = `Resource not found`;
-    error = new ErrorResponse(message, 404);
-  }
+	// --- Handle Mongoose CastError (Invalid ObjectId)
+	if (err.name === "CastError") {
+		message = `Resource not found with id ${err.value}`;
+		statusCode = 404;
+	}
 
-  // Mongoose duplicate key
-  if (err.code === 11000) {
-    const message = 'Duplicate field value entered';
-    error = new ErrorResponse(message, 400);
-  }
+	// --- Handle Mongoose duplicate key error
+	if (err.code === 11000) {
+		const fields = Object.keys(err.keyValue);
+		message = `Duplicate value for field: ${fields.join(", ")}`;
+		statusCode = 400;
+	}
 
-  // Mongoose validation error
-  if (err.name === 'ValidationError') {
-    const message = Object.values(err.errors).map(val => val.message);
-    error = new ErrorResponse(message, 400);
-  }
+	// --- Handle Mongoose validation errors
+	if (err.name === "ValidationError") {
+		errors = Object.values(err.errors).map((val) => ({
+			field: val.path,
+			message: val.message,
+		}));
+		message = "Validation failed";
+		statusCode = 400;
+	}
 
-  res.status(error.statusCode || 500).json({
-    success: false,
-    error: error.message || 'Server Error'
-  });
+	// --- Handle JSON Web Token errors (optional, if you use JWT)
+	if (err.name === "JsonWebTokenError") {
+		message = "Invalid token";
+		statusCode = 401;
+	}
+
+	if (err.name === "TokenExpiredError") {
+		message = "Token expired";
+		statusCode = 401;
+	}
+
+	// --- Handle custom ErrorResponse
+	if (err instanceof ErrorResponse) {
+		message = err.message || message;
+		statusCode = err.statusCode || statusCode;
+		errors = err.errors || errors;
+	}
+
+	// --- Send final structured response
+	res.status(statusCode).json({
+		success: false,
+		message,
+		errors,
+		statusCode,
+		timestamp: new Date().toISOString(),
+		// path: req.originalUrl,
+	});
 };
 
 module.exports = errorHandler;

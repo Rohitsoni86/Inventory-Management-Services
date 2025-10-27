@@ -1,24 +1,146 @@
 const asyncHandler = require("express-async-handler");
 const bcryptjs = require("bcryptjs");
 const ErrorResponse = require("../utils/errorResponse");
-const OrganizationAdminModel = require("../models/organizationAdminModel");
 const Organization = require("../models/organizationModel");
-const EmployeeUserModel = require("../models/organizationEmployeesModel");
 const moment = require("moment");
 const crypto = require("crypto");
 const bcrypt = require("bcrypt");
-const mongoose = require("mongoose");
+const { default: mongoose } = require("mongoose");
 const { default: axios } = require("axios");
 const dotenv = require("dotenv");
 dotenv.config({ path: "../config/config.env" });
 const CryptoJS = require("crypto-js");
-const speakeasy = require("speakeasy");
-const qrcode = require("qrcode");
 const jwt = require("jsonwebtoken");
 const logger = require("../middlewares/custom-logger");
 const User = require("../models/userModel");
+const speakeasy = require("speakeasy");
+const qrcode = require("qrcode");
+const Joi = require("joi");
 
-const loginUser = asyncHandler(async (req, res, next) => {
+const registerSchema = Joi.object({
+	legalName: Joi.string().min(2).required(),
+	registrationNumber: Joi.string().optional(),
+	email: Joi.string().email().required(),
+	countryCode: Joi.string()
+		.pattern(/^\+?[1-9]\d{1,14}$/)
+		.required(),
+	phone: Joi.string()
+		.pattern(/^\d{10,15}$/)
+		.required(),
+	address: Joi.string().required(),
+	city: Joi.string().required(),
+	state: Joi.string().required(),
+	country: Joi.string().required(),
+	postalCode: Joi.string().required(),
+	companySize: Joi.string().required(),
+	flagCode: Joi.string().max(2).required(),
+	user: Joi.object({
+		firstName: Joi.string().min(2).required(),
+		middleName: Joi.string().optional(),
+		lastName: Joi.string().min(2).required(),
+		email: Joi.string().email().required(),
+		password: Joi.string().min(8).required(),
+		confirmPassword: Joi.string().min(8).optional(),
+		countryCode: Joi.string().required(),
+		flagCode: Joi.string().max(2).required(),
+		phone: Joi.string()
+			.pattern(/^\d{10,15}$/)
+			.required(),
+	}).required(),
+});
+
+const SignUp = asyncHandler(async (req, res, next) => {
+	// validate with joi
+	const { error } = registerSchema.validate(req.body);
+	if (error) return next(new ErrorResponse(error.details[0].message, 400));
+
+	const {
+		legalName,
+		registrationNumber,
+		email,
+		countryCode,
+		phone,
+		address,
+		city,
+		state,
+		country,
+		postalCode,
+		companySize,
+		flagCode,
+		user,
+		roles,
+		active,
+	} = req.body;
+
+	// check for exsisting user
+	const existingUser = await User.findOne({ email: user.email });
+	if (existingUser)
+		return next(new ErrorResponse("User with this email already exists", 400));
+
+	const session = await mongoose.startSession();
+	session.startTransaction();
+
+	try {
+		const hashedPwd = await bcryptjs.hash(user.password, 10);
+		const [userDoc] = await User.create(
+			[
+				{
+					...user,
+					password: hashedPwd,
+					roles: ["admin"],
+					active: true,
+				},
+			],
+			{ session }
+		);
+
+		const [orgDoc] = await Organization.create(
+			[
+				{
+					legalName,
+					registrationNumber,
+					email,
+					countryCode,
+					phone,
+					address,
+					city,
+					state,
+					country,
+					postalCode,
+					companySize,
+					flagCode,
+					createdBy: userDoc._id,
+					admins: [userDoc._id],
+					active,
+				},
+			],
+			{ session }
+		);
+
+		userDoc.organizations.push(orgDoc._id);
+		await userDoc.save({ session });
+
+		await session.commitTransaction();
+
+		logger.info(`New organization created: ${orgDoc.legalName}`);
+
+		res.status(201).json({
+			success: true,
+			data: { user: userDoc, organization: orgDoc },
+			message: "Registration Successful!",
+		});
+	} catch (err) {
+		await session.abortTransaction();
+		logger.error(`Registration failed: ${err.message}`);
+		return next(
+			new ErrorResponse(err.message || "Error processing request", 500)
+		);
+	} finally {
+		session.endSession();
+	}
+});
+
+const LoginUser = asyncHandler(async (req, res, next) => {
 	const { email, password } = req.body;
 
 	if (!email || !password) {
@@ -65,7 +187,7 @@ const loginUser = asyncHandler(async (req, res, next) => {
 					secret: foundUser.mfaSecret,
 				},
 			});
-		} else if (foundEmpUser && foundEmpUser.mfaEnabled) {
+		} else if (foundUser && foundUser.mfaEnabled) {
 			return res.status(200).json({
 				success: true,
 				data: {
@@ -99,107 +221,7 @@ const loginUser = asyncHandler(async (req, res, next) => {
 	}
 });
 
-// const verifyUserMFA = asyncHandler(async (req, res, next) => {
-// 	const { code, secret } = req.body;
-// 	try {
-// 		const user = req.user;
-
-// 		let foundUser;
-// 		let isAdmin;
-// 		if (user.roles.includes("admin")) {
-// 			foundUser = await OrganizationAdminModel.findOne({
-// 				adminEmail: user.email,
-// 			});
-// 			isAdmin = true;
-// 		}
-
-// 		if (user.roles.includes("employee")) {
-// 			foundUser = await EmployeeUserModel.findOne({
-// 				email: user.email,
-// 			});
-// 			isAdmin = false;
-// 		}
-
-// 		if (foundUser.mfaEnabled && foundUser.mfaSecret !== secret) {
-// 			return res.status(400).json({ success: false, data: "Invalid Secret" });
-// 		}
-// 		const isValid = speakeasy.totp.verify({
-// 			secret,
-// 			encoding: "base32",
-// 			token: code,
-// 		});
-
-// 		if (isValid) {
-// 			const roles = foundUser.roles;
-// 			console.log(roles);
-
-// 			const accessToken = jwt.sign(
-// 				{
-// 					UserInfo: {
-// 						username: isAdmin ? foundUser.adminEmail : foundUser.password,
-// 						roles: foundUser.roles,
-// 						id: foundUser.id,
-// 					},
-// 				},
-// 				process.env.ACCESS_TOKEN_SECRET,
-// 				{ algorithm: "HS256", expiresIn: "60m" }
-// 			);
-
-// 			const refreshToken = jwt.sign(
-// 				{ email: isAdmin ? foundUser.adminEmail : foundUser.password },
-// 				process.env.REFRESH_TOKEN_SECRET,
-// 				{ algorithm: "HS256", expiresIn: "1d" }
-// 			);
-// 			// Saving refreshToken with current user
-// 			foundUser.refreshToken = refreshToken;
-// 			foundUser.mfaSecret = secret;
-// 			foundUser.mfaEnabled = true;
-// 			const result = await foundUser.save();
-// 			res.clearCookie("temporarytoken", {
-// 				httpOnly: true,
-// 				sameSite: "None",
-// 				secure: true,
-// 			});
-// 			// Create secure cookie with refresh token
-// 			res.cookie("refreshToken", refreshToken, {
-// 				httpOnly: true, //accessible only by web server
-// 				secure: true, //https
-// 				sameSite: "None", //cross-site cookie
-// 				maxAge: 7 * 24 * 60 * 60 * 1000, //cookie expiry: set to match rT
-// 			});
-
-// 			res.cookie("accessToken", accessToken, {
-// 				httpOnly: true, //accessible only by web server
-// 				secure: true, //https
-// 				sameSite: "None", //cross-site cookie
-// 				maxAge: 60 * 60 * 1000,
-// 			});
-
-// 			// Send accessToken containing username and roles
-// 			// Send authorization roles and access token to user
-// 			logger.info({
-// 				roles,
-// 				accessToken,
-// 				username: isAdmin ? foundUser.adminFirstName : foundUser.name,
-// 			});
-// 			res.status(200).json({
-// 				success: true,
-// 				data: {
-// 					name: isAdmin ? foundUser.adminFirstName : foundUser.name,
-// 					userId: foundUser._id,
-// 				},
-// 			});
-// 		} else {
-// 			res.status(400).json({ success: false, message: "Invalid code" });
-// 		}
-// 	} catch (error) {
-// 		console.log(error);
-// 		res.status(500).json({ success: false, data: "Something went wrong" });
-// 	}
-// });
-
-// verify Super admin you need to make token different for both
-const verifyUserMFA = asyncHandler(async (req, res, next) => {
+const VerifyUserMFA = asyncHandler(async (req, res, next) => {
 	const { code, secret } = req.body;
 	try {
 		const user = req.user;
@@ -304,7 +326,7 @@ const verifyUserMFA = asyncHandler(async (req, res, next) => {
 	}
 });
 
-const refreshUserToken = async (req, res, next) => {
+const RefreshUserToken = async (req, res, next) => {
 	const cookies = req.cookies;
 
 	// Check if the JWT refresh token is present in cookies
@@ -327,16 +349,10 @@ const refreshUserToken = async (req, res, next) => {
 			// Check if the decoded email corresponds to an Admin or Employee
 			if (decoded.roles && decoded.roles.includes("admin")) {
 				// Assuming you have a model for Admins, adjust this based on your actual model.
-				foundUser = await OrganizationAdminModel.findOne({
-					adminEmail: decoded.email,
-				});
-				isAdmin = true; // User is an admin
-			} else if (decoded.roles && decoded.roles.includes("employee")) {
-				// Assuming you have a model for Employees, adjust this based on your actual model.
-				foundUser = await EmployeeUserModel.findOne({
+				foundUser = await User.findOne({
 					email: decoded.email,
 				});
-				isAdmin = false; // User is an employee
+				// isAdmin = true; // User is an admin
 			}
 
 			if (!foundUser) return res.status(401).json({ message: "Unauthorized" });
@@ -345,14 +361,15 @@ const refreshUserToken = async (req, res, next) => {
 			const accessToken = jwt.sign(
 				{
 					UserInfo: {
-						username: isAdmin ? foundUser.adminEmail : foundUser.email,
+						username: foundUser.email,
 						roles: foundUser.roles,
 						id: foundUser._id, // Make sure you're using _id, not id in Mongoose
 					},
 				},
-				isAdmin
-					? process.env.ADMIN_ACCESS_TOKEN_SECRET
-					: process.env.EMPLOYEE_ACCESS_TOKEN_SECRET,
+				// isAdmin
+				// 	? process.env.ADMIN_ACCESS_TOKEN_SECRET
+				// 	: process.env.EMPLOYEE_ACCESS_TOKEN_SECRET,
+				process.env.ACCESS_TOKEN_SECRET,
 				{ algorithm: "HS256", expiresIn: "15m" } // Adjust expiration as necessary
 			);
 
@@ -370,7 +387,7 @@ const refreshUserToken = async (req, res, next) => {
 	);
 };
 
-const verifyUserAuth = asyncHandler(async (req, res, next) => {
+const VerifyUserAuth = asyncHandler(async (req, res, next) => {
 	const { id } = req.user; // Assuming `id` is set by the token or middleware
 	const token = req.cookies.accessToken; // Access token from cookies
 
@@ -385,18 +402,15 @@ const verifyUserAuth = asyncHandler(async (req, res, next) => {
 
 	// Check if the user is an Admin
 	if (req.user.roles.includes("admin")) {
-		user = await OrganizationAdminModel.findById(id).populate(
-			"organizations",
-			"legalName"
-		); // Use Admin model
-		isAdmin = true; // Mark as Admin
+		user = await User.findById(id).populate("organizations", "legalName"); // Use User model
+		// isAdmin = true; // Mark as Admin
 	}
 
-	// Check if the user is an Admin
-	if (req.user.roles.includes("employee")) {
-		user = await EmployeeUserModel.findById(id); // Use Admin model
-		isAdmin = false; // Mark as Admin
-	}
+	// // Check if the user is an Admin
+	// if (req.user.roles.includes("employee")) {
+	// 	user = await EmployeeUserModel.findById(id); // Use Admin model
+	// 	isAdmin = false; // Mark as Admin
+	// }
 
 	// If no user is found (neither SuperAdmin nor Admin), return a 403 error
 	if (!user) {
@@ -416,17 +430,16 @@ const verifyUserAuth = asyncHandler(async (req, res, next) => {
 		data: "User Authenticated Successfully",
 		id,
 		roles: req.user.roles, // Roles from token payload
-		username: isAdmin
-			? `${user.adminFirstName + user.adminLastName}`
-			: user.name,
-		email: isAdmin ? user.adminEmail : user.email,
+		username: user.name,
+		email: user.email,
 		organizationDetails: user.organizations,
 	});
 });
 
 module.exports = {
-	loginUser,
-	verifyUserMFA,
-	refreshUserToken,
-	verifyUserAuth,
+	SignUp,
+	LoginUser,
+	VerifyUserMFA,
+	RefreshUserToken,
+	VerifyUserAuth,
 };

@@ -97,7 +97,7 @@ const productsSchema = new mongoose.Schema(
 				validator: function (v) {
 					return /^\+?[1-9]\d{1,14}$/.test(v); // Validate international phone number format
 				},
-				message: "Invalid admin country code format",
+				message: "Invalid country code format",
 			},
 			default: "IN",
 		},

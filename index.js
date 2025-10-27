@@ -8,6 +8,7 @@ const cookieParser = require("cookie-parser");
 dotenv.config();
 const apiRoutes = require("./routes/api.routes");
 const router = require("./routes/api.routes");
+const errorHandler = require("./middlewares/error");
 
 const app = express();
 app.use(express.json());
@@ -123,11 +124,4 @@ startServer();
 
 app.use("/api/v1", apiRoutes);
 
-// app.use((req, res, next) => {
-// 	res.status(404).json({ message: "Route not found" });
-// });
-
-// app.use((err, req, res, next) => {
-// 	console.error(err.stack);
-// 	res.status(500).json({ message: "Internal Server Error" });
-// });
+app.use(errorHandler);

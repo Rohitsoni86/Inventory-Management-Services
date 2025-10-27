@@ -1,30 +1,27 @@
 const express = require("express");
-const { createNewUser, loginAdmin } = require("../controllers/userController");
 const {
-	loginUser,
-	verifyUserMFA,
-	refreshUserToken,
-	verifyUserAuth,
-} = require("../controllers/orgAuthController");
-const {
-	verifyUserTemporaryToken,
+	verifyTemporaryToken,
 	verifyOrganizationJWT,
 } = require("../middlewares/verifyJWT");
+const {
+	SignUp,
+	LoginUser,
+	VerifyUserMFA,
+	VerifyUserAuth,
+} = require("../controllers/authcontroller");
 
 const userRouter = express.Router();
 
-userRouter.route("/organization/add").post(createNewUser);
-
 // authentication
-
-userRouter.route("/organization/login").post(loginUser);
+userRouter.route("/organization/signup").post(SignUp);
+userRouter.route("/organization/login").post(LoginUser);
 userRouter.post(
-	"/organization/verifyMFA",
-	verifyUserTemporaryToken,
-	verifyUserMFA
+	"/organization/user/verify-MFA",
+	verifyTemporaryToken,
+	VerifyUserMFA
 );
 
 userRouter.use(verifyOrganizationJWT);
-userRouter.get("/organization/verify", verifyUserAuth);
+userRouter.get("/organization/user/verify", VerifyUserAuth);
 
 module.exports = userRouter;

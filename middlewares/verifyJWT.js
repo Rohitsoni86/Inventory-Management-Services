@@ -1,8 +1,6 @@
 const jwt = require("jsonwebtoken");
 const ErrorResponse = require("../utils/errorResponse");
 
-// Super Admin
-
 const verifyJWT = (req, res, next) => {
 	const token = req.cookies.accessToken;
 	let subDomain = req.headers.origin?.split(".")[0] || "";
@@ -14,7 +12,7 @@ const verifyJWT = (req, res, next) => {
 
 	jwt.verify(
 		token,
-		process.env.SUP_ADMIN_ACCESS_TOKEN_SECRET,
+		process.env.ACCESS_TOKEN_SECRET,
 		{ algorithms: ["HS256"] },
 		(err, decoded) => {
 			if (err) {
@@ -29,25 +27,6 @@ const verifyJWT = (req, res, next) => {
 };
 
 const verifyTemporaryToken = (req, res, next) => {
-	const token = req.cookies.temporarytoken;
-	if (!token) {
-		return next(new ErrorResponse("Not authorized to access this route", 401));
-	}
-
-	jwt.verify(
-		token,
-		process.env.SUP_ADMIN_ACCESS_TOKEN_SECRET,
-		{ algorithms: ["HS256"] },
-		(err, decoded) => {
-			console.log(err);
-			if (err) return res.status(403).json({ message: "Forbidden" });
-			req.user = decoded;
-			next();
-		}
-	);
-};
-
-const verifyUserTemporaryToken = (req, res, next) => {
 	const token = req.cookies.temporarytoken;
 	if (!token) {
 		return next(new ErrorResponse("Not authorized to access this route", 401));
@@ -97,5 +76,4 @@ module.exports = {
 	verifyJWT,
 	verifyTemporaryToken,
 	verifyOrganizationJWT,
-	verifyUserTemporaryToken,
 };

@@ -13,8 +13,14 @@ dotenv.config({ path: "../config/config.env" });
 const CryptoJS = require("crypto-js");
 const jwt = require("jsonwebtoken");
 const logger = require("../middlewares/custom-logger");
+const User = require("../models/userModel");
+const { default: registerSchema } = require("../schemas/registerSchema");
 
 const createNewUser = asyncHandler(async (req, res, next) => {
+	// validate with joi
+	const { error } = registerSchema.validate(req.body);
+	if (error) return next(new ErrorResponse(error.details[0].message, 400));
+
 	const {
 		legalName,
 		registrationNumber,
@@ -28,75 +34,76 @@ const createNewUser = asyncHandler(async (req, res, next) => {
 		postalCode,
 		companySize,
 		flagCode,
-		adminFirstName,
-		adminLastName,
-		adminEmail,
-		adminCountryCode,
-		adminPhone,
-		adminPassword,
-		credentials,
-		adminFlagCode,
+		user,
 		roles,
 		active,
 	} = req.body;
 
+	// check for exsisting user
+	const existingUser = await User.findOne({ email: user.email });
+	if (existingUser)
+		return next(new ErrorResponse("User with this email already exists", 400));
+
+	const session = await mongoose.startSession();
+	session.startTransaction();
+
 	try {
-		// Hash password
-		const hashedPwd = await bcryptjs.hash(adminPassword, 10); // salt rounds
-		const createdDate = new Date();
+		const hashedPwd = await bcryptjs.hash(user.password, 10);
+		const [userDoc] = await User.create(
+			[
+				{
+					...user,
+					password: hashedPwd,
+					roles: ["admin"],
+					active: true,
+				},
+			],
+			{ session }
+		);
 
-		// Create admin document
-		const admin = new OrganizationAdminModel({
-			adminFirstName,
-			adminLastName,
-			adminEmail,
-			adminCountryCode,
-			adminPhone,
-			adminPassword: hashedPwd,
-			credentials,
-			adminFlagCode,
-			roles,
-			active,
-			createdAt: createdDate,
-		});
-		await admin.save();
+		const [orgDoc] = await Organization.create(
+			[
+				{
+					legalName,
+					registrationNumber,
+					email,
+					countryCode,
+					phone,
+					address,
+					city,
+					state,
+					country,
+					postalCode,
+					companySize,
+					flagCode,
+					createdBy: userDoc._id,
+					admins: [userDoc._id],
+					active,
+				},
+			],
+			{ session }
+		);
 
-		// Create organization document
-		const organization = new Organization({
-			legalName,
-			registrationNumber,
-			email,
-			countryCode,
-			phone,
-			address,
-			city,
-			state,
-			country,
-			postalCode,
-			companySize,
-			flagCode,
-			createdAt: createdDate,
-			createdBy: admin._id,
-			admins: [admin._id],
-			active,
-		});
-		await organization.save();
+		userDoc.organizations.push(orgDoc._id);
+		await userDoc.save({ session });
 
-		// Update admin document to include the organization
-		admin.organizations.push(organization._id);
-		await admin.save();
+		await session.commitTransaction();
+
+		logger.info(`New organization created: ${orgDoc.legalName}`);
 
 		res.status(201).json({
 			success: true,
-			data: {
-				admin,
-				organization,
-			},
+			data: { user: userDoc, organization: orgDoc },
 			message: "Registration Successful!",
 		});
 	} catch (err) {
-		console.error("Error creating admin and organization:", err);
-		return next(new ErrorResponse("Error processing the request", 500));
+		await session.abortTransaction();
+		logger.error(`Registration failed: ${err.message}`);
+		return next(
+			new ErrorResponse(err.message || "Error processing request", 500)
+		);
+	} finally {
+		session.endSession();
 	}
 });
 
