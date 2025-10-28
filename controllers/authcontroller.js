@@ -187,15 +187,6 @@ const LoginUser = asyncHandler(async (req, res, next) => {
 					secret: foundUser.mfaSecret,
 				},
 			});
-		} else if (foundUser && foundUser.mfaEnabled) {
-			return res.status(200).json({
-				success: true,
-				data: {
-					mfaEnabled: foundUser.mfaEnabled,
-					secret: mfaEnabled,
-					mfaSecret,
-				},
-			});
 		} else {
 			const secret = speakeasy.generateSecret({ length: 20 });
 			console.log("MFA Not Found", secret);
@@ -229,13 +220,9 @@ const VerifyUserMFA = asyncHandler(async (req, res, next) => {
 		let isAdmin = false;
 		console.log("User Req", user);
 
-		// Check for roles and fetch user data
-		if (user.roles.includes("admin")) {
-			foundUser = await User.findOne({
-				email: user.email,
-			}).populate("organizations");
-			isAdmin = true;
-		}
+		foundUser = await User.findOne({
+			email: user.email,
+		}).populate("organizations");
 
 		// Check if the role is valid, if not return an error
 		if (!foundUser) {
@@ -249,6 +236,10 @@ const VerifyUserMFA = asyncHandler(async (req, res, next) => {
 				.status(400)
 				.json({ success: false, message: "Invalid MFA Secret" });
 		}
+
+		let nameOfUser = `${foundUser.firstName} ${foundUser.middleName ?? ""} ${
+			foundUser.lastName
+		}`;
 
 		// Verify TOTP code
 		const isValid = speakeasy.totp.verify({
@@ -307,14 +298,16 @@ const VerifyUserMFA = asyncHandler(async (req, res, next) => {
 			logger.info({
 				roles,
 				accessToken,
-				username: foundUser.name,
+				username: nameOfUser,
 			});
 
 			res.status(200).json({
 				success: true,
 				data: {
-					name: foundUser.name,
+					name: nameOfUser,
 					userId: foundUser._id,
+					role: foundUser.roles,
+					// organizationDetails: foundUser.organizations,
 				},
 			});
 		} else {
