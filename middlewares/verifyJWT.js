@@ -65,8 +65,10 @@ const verifyOrganizationJWT = (req, res, next) => {
 				return res.status(403).json({ message: "Forbidden" });
 			}
 			// if(subDomain && (subDomain !== decoded.UserInfo.tname)) return res.status(403).json({ message: "Forbidden" });
+			console.log("Verify JWT Token Data Values ==>", decoded);
 			req.user = decoded.UserInfo;
 			req.roles = decoded.UserInfo.roles;
+			req.organizationId = decoded.organizationId;
 			next();
 		}
 	);

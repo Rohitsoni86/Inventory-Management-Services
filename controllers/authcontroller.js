@@ -112,6 +112,7 @@ const SignUp = asyncHandler(async (req, res, next) => {
 					createdBy: userDoc._id,
 					admins: [userDoc._id],
 					active,
+					defaultStore: true, // make this default store as when user login we need to get the default storte
 				},
 			],
 			{ session }
@@ -153,7 +154,12 @@ const LoginUser = asyncHandler(async (req, res, next) => {
 		});
 
 		if (!foundUser || foundUser.active === false) {
-			return next(new ErrorResponse("Invalid credentials", 401));
+			return next(
+				new ErrorResponse(
+					"Invalid credentials,please check your email or password",
+					401
+				)
+			);
 		}
 
 		console.log("Founded User", foundUser);
@@ -162,13 +168,14 @@ const LoginUser = asyncHandler(async (req, res, next) => {
 		console.log("Match Password", match);
 
 		if (!match) {
-			return res.status(401).json({ message: "Unauthorized" });
+			return res.status(401).json({ message: "Invalid email or password !" });
 		}
 
 		const temporarytoken = jwt.sign(
 			{
 				email: foundUser.email,
 				roles: foundUser.roles,
+				id: foundUser._id,
 			},
 			process.env.ACCESS_TOKEN_SECRET,
 			{ algorithm: "HS256", expiresIn: "5m" }
@@ -250,13 +257,27 @@ const VerifyUserMFA = asyncHandler(async (req, res, next) => {
 
 		if (isValid) {
 			const roles = foundUser.roles;
+
+			const extractedDefaultStoreId = foundUser.organizations?.find(
+				(org) => org.defaultStore
+			)?._id;
+
+			console.log(
+				"JWT Middleware==>",
+				foundUser,
+				foundUser.organizations,
+				extractedDefaultStoreId
+			);
+
 			const accessToken = jwt.sign(
 				{
 					UserInfo: {
-						username: foundUser.email,
+						username: nameOfUser,
+						email: foundUser.email,
 						roles: foundUser.roles,
 						id: foundUser._id,
 					},
+					organizationId: `${extractedDefaultStoreId}`,
 				},
 				process.env.ACCESS_TOKEN_SECRET,
 				{ algorithm: "HS256", expiresIn: "60m" }
@@ -299,6 +320,7 @@ const VerifyUserMFA = asyncHandler(async (req, res, next) => {
 				roles,
 				accessToken,
 				username: nameOfUser,
+				selectedStore: extractedDefaultStoreId,
 			});
 
 			res.status(200).json({
@@ -307,7 +329,7 @@ const VerifyUserMFA = asyncHandler(async (req, res, next) => {
 					name: nameOfUser,
 					userId: foundUser._id,
 					role: foundUser.roles,
-					// organizationDetails: foundUser.organizations,
+					defaultStore: extractedDefaultStoreId,
 				},
 			});
 		} else {
@@ -382,7 +404,8 @@ const RefreshUserToken = async (req, res, next) => {
 
 const VerifyUserAuth = asyncHandler(async (req, res, next) => {
 	const { id } = req.user; // Assuming `id` is set by the token or middleware
-	const token = req.cookies.accessToken; // Access token from cookies
+	const organizationId = req.organizationId;
+	const token = req.cookies.accessToken;
 
 	// If no access token is found, return a 403 error
 	if (!token) {
@@ -391,19 +414,14 @@ const VerifyUserAuth = asyncHandler(async (req, res, next) => {
 
 	// Find the user by ID, first checking if the user is a SuperAdmin or Admin
 	let user;
-	let isAdmin = false;
+
+	console.log("Founded User ==>", req.user, organizationId);
+	// let isAdmin = false;
 
 	// Check if the user is an Admin
 	if (req.user.roles.includes("admin")) {
 		user = await User.findById(id).populate("organizations", "legalName"); // Use User model
-		// isAdmin = true; // Mark as Admin
 	}
-
-	// // Check if the user is an Admin
-	// if (req.user.roles.includes("employee")) {
-	// 	user = await EmployeeUserModel.findById(id); // Use Admin model
-	// 	isAdmin = false; // Mark as Admin
-	// }
 
 	// If no user is found (neither SuperAdmin nor Admin), return a 403 error
 	if (!user) {
@@ -417,15 +435,96 @@ const VerifyUserAuth = asyncHandler(async (req, res, next) => {
 		return res.status(401).json({ message: "USER BANNED" });
 	}
 
-	// If user is found and active, pass on to the next middleware or route handler
+	console.log("User Details From DB ==>", user);
+
+	const foundOrganization = user.organizations.find(
+		(org) => org._id.toString() === organizationId
+	);
+	console.log("User Details From DB ==>", foundOrganization);
+
+	if (!foundOrganization) {
+		return res.status(403).json({
+			success: false,
+			message: "Unauthorized User !",
+		});
+	}
+
+	// If user is found and active, & orag is also found pass on to the next middleware or route handler
 	res.status(200).json({
 		success: true,
 		data: "User Authenticated Successfully",
 		id,
 		roles: req.user.roles, // Roles from token payload
-		username: user.name,
+		username: req.user.username,
 		email: user.email,
-		organizationDetails: user.organizations,
+		organizationDetails: foundOrganization,
+	});
+});
+
+const ResetPassword = asyncHandler(async (req, res, next) => {
+	const { id } = req.user; // Assuming `id` is set by the token or middleware
+	const token = req.cookies.accessToken;
+
+	const { oldPassword, newPassword, confirmPassword } = req.body;
+
+	// If no access token is found, return a 401 error
+
+	if (!token) {
+		return new ErrorResponse("Invalid Credentials", 401);
+	}
+
+	if (!oldPassword || !newPassword || !confirmPassword) {
+		return res
+			.status(400)
+			.json({ success: false, data: "All fields required" });
+	}
+
+	if (confirmPassword !== newPassword) {
+		return next(
+			new ErrorResponse("New password and confirm password does not match", 400)
+		);
+	}
+
+	// now find user if it exsists or not and if it exsist then extract password
+	const user = await User.findById(id).select("+password").lean().exec();
+
+	if (!user) {
+		return new ErrorResponse("User not found", 404);
+	}
+
+	//now check old password and match to the fetched password by decrypting it
+
+	const match = await bcryptjs.compare(oldPassword, user.password);
+
+	if (!match) {
+		return next(new ErrorResponse("Invalid Old Password", 401));
+	}
+
+	// now check new password and confirm password
+	if (newPassword !== confirmPassword) {
+		return next(
+			new ErrorResponse("New Password and Confirm Password Does Not Match", 400)
+		);
+	}
+
+	// now hash the new password and save it to the database
+	const hashedNewPassword = await bcryptjs.hash(newPassword, 10);
+
+	const updatedUser = await User.findByIdAndUpdate(
+		id,
+		{ password: hashedNewPassword },
+		{ new: true }
+	);
+
+	if (!updatedUser) {
+		return next(new ErrorResponse("Failed to update password", 500));
+	}
+
+	console.log("Reseting Password Done");
+
+	res.status(200).json({
+		success: true,
+		message: "Password Updated Successfully",
 	});
 });
 
@@ -435,4 +534,5 @@ module.exports = {
 	VerifyUserMFA,
 	RefreshUserToken,
 	VerifyUserAuth,
+	ResetPassword,
 };

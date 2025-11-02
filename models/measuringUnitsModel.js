@@ -19,6 +19,17 @@ const measuringUnitSchema = new mongoose.Schema(
 			minlength: 1,
 			maxlength: 10,
 		},
+		status: { type: String, enum: ["active", "inactive"], default: "active" },
+		createdBy: {
+			type: mongoose.Schema.Types.ObjectId,
+			required: true,
+			ref: "User",
+		},
+		updatedBy: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: "User",
+		},
+
 		organizations: [
 			{ type: mongoose.Schema.Types.ObjectId, ref: "Organization" },
 		],
@@ -28,6 +39,6 @@ const measuringUnitSchema = new mongoose.Schema(
 	}
 );
 
-const MeasuringUnit = mongoose.model("Units", measuringUnitSchema);
+const MeasuringUnit = mongoose.model("Unit", measuringUnitSchema);
 
-module.exports = MeasuringUnit;
+module.exports = { measuringUnitSchema, MeasuringUnit };

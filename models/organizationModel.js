@@ -146,6 +146,11 @@ const organizationSchema = new mongoose.Schema(
 				ref: "Supplier",
 			},
 		],
+
+		defaultStore: {
+			type: Boolean,
+			default: true,
+		},
 	},
 	{
 		timestamps: true,

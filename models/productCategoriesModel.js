@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Schema = mongoose.Schema;
+// const timezonePlugin = require("./plugins/timezonePlugin");
 
 const productCategorySchema = new mongoose.Schema(
 	{
@@ -16,6 +17,16 @@ const productCategorySchema = new mongoose.Schema(
 			trim: true,
 			maxlength: 200,
 		},
+		status: { type: String, enum: ["active", "inactive"], default: "active" },
+		createdBy: {
+			type: mongoose.Schema.Types.ObjectId,
+			required: true,
+			ref: "User",
+		},
+		updatedBy: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: "User",
+		},
 		organizations: [
 			{ type: mongoose.Schema.Types.ObjectId, ref: "Organization" },
 		],
@@ -25,9 +36,9 @@ const productCategorySchema = new mongoose.Schema(
 	}
 );
 
-const ProductCategory = mongoose.model(
-	"ProductCategories",
-	productCategorySchema
-);
+// Apply the timezone plugin
+// productCategorySchema.plugin(timezonePlugin);
+
+const ProductCategory = mongoose.model("Category", productCategorySchema);
 
 module.exports = ProductCategory;

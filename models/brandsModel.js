@@ -1,6 +1,8 @@
 const mongoose = require("mongoose");
 const Schema = mongoose.Schema;
 
+// const timezonePlugin = require("./plugins/timezonePlugin");
+
 const brandSchema = new mongoose.Schema(
 	{
 		name: {
@@ -16,6 +18,16 @@ const brandSchema = new mongoose.Schema(
 			trim: true,
 			maxlength: 200,
 		},
+		status: { type: String, enum: ["active", "inactive"], default: "active" },
+		createdBy: {
+			type: mongoose.Schema.Types.ObjectId,
+			required: true,
+			ref: "User",
+		},
+		updatedBy: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: "User",
+		},
 		organizations: [
 			{ type: mongoose.Schema.Types.ObjectId, ref: "Organization" },
 		],
@@ -25,6 +37,12 @@ const brandSchema = new mongoose.Schema(
 	}
 );
 
-const Brand = mongoose.model("Brands", brandSchema);
+// Apply the timezone plugin
+// brandSchema.plugin(timezonePlugin);
 
-module.exports = Brand;
+const Brand = mongoose.model("Brand", brandSchema);
+
+module.exports = {
+	brandSchema,
+	Brand,
+};
