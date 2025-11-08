@@ -146,6 +146,18 @@ const organizationSchema = new mongoose.Schema(
 				ref: "Supplier",
 			},
 		],
+		unitFamilies: [
+			{
+				type: mongoose.Schema.Types.ObjectId,
+				ref: "UnitFamily",
+			},
+		],
+		productTypes: [
+			{
+				type: mongoose.Schema.Types.ObjectId,
+				ref: "ProductType",
+			},
+		],
 
 		defaultStore: {
 			type: Boolean,

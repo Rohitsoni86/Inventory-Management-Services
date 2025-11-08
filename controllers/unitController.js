@@ -2,12 +2,16 @@ const asyncHandler = require("express-async-handler");
 const ErrorResponse = require("../utils/errorResponse");
 const { MeasuringUnit } = require("../models/measuringUnitsModel");
 const Organization = require("../models/organizationModel");
+const { object } = require("joi");
+const { default: mongoose } = require("mongoose");
+const { UnitFamily } = require("../models/unitFamiliyModel");
 
 // @desc Create a new unit
 // @route POST /api/admin/create/unit
 // @access Private (Admin)
 const createUnit = asyncHandler(async (req, res, next) => {
-	const { name, shortName, description } = req.body;
+	const { name, shortName, description, multiplierToBase, isBase, family } =
+		req.body;
 	const organizationId = req.organizationId;
 
 	if (!name || !shortName) {
@@ -22,13 +26,31 @@ const createUnit = asyncHandler(async (req, res, next) => {
 	}
 
 	try {
+		let familyUnitID = new mongoose.Types.ObjectId(family?._id);
+
 		const unit = await MeasuringUnit.create({
 			name,
 			shortName,
 			description,
+			multiplierToBase,
+			isBase,
+			family: familyUnitID,
 			createdBy: req.user.id,
 			organizations: [organizationId],
 		});
+
+		// Here we need to update the Unit Family for Base unit
+
+		const unitFamily = await UnitFamily.findById(familyUnitID);
+
+		if (!unitFamily) {
+			return next(new ErrorResponse(`Unit Family not found`, 404));
+		}
+
+		if (unit.isBase) {
+			unitFamily.baseUnit = unit._id;
+			await unitFamily.save();
+		}
 
 		const organization = await Organization.findById(req.organizationId);
 		if (!organization) {
@@ -53,6 +75,7 @@ const createUnit = asyncHandler(async (req, res, next) => {
 			message: "Unit created successfully",
 		});
 	} catch (error) {
+		console.log("Error In creating unit ==>", error);
 		return res.status(500).json({ success: false, data: error.message });
 	}
 });

@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const Schema = mongoose.Schema;
 
-const measuringUnitSchema = new mongoose.Schema(
+const unitFamilySchema = new mongoose.Schema(
 	{
 		name: {
 			type: String,
@@ -12,29 +12,20 @@ const measuringUnitSchema = new mongoose.Schema(
 			maxlength: 50,
 		},
 		shortName: {
-			// 'kg','g','box12'
 			type: String,
-			required: true,
+			required: false,
 			trim: true,
 			unique: true,
 			minlength: 1,
 			maxlength: 10,
 		},
-		family: {
-			// 'Kilogram'
+		description: {
+			type: String,
+			trim: true,
+		},
+		baseUnit: {
 			type: mongoose.Schema.Types.ObjectId,
-			ref: "UnitFamily",
-			required: true,
-		},
-		multiplierToBase: {
-			// 1000
-			type: Number,
-			required: true,
-			default: 1,
-		},
-		isBase: {
-			type: Boolean,
-			default: false,
+			ref: "Unit",
 		},
 		status: { type: String, enum: ["active", "inactive"], default: "active" },
 		createdBy: {
@@ -56,6 +47,6 @@ const measuringUnitSchema = new mongoose.Schema(
 	}
 );
 
-const MeasuringUnit = mongoose.model("Unit", measuringUnitSchema);
+const UnitFamily = mongoose.model("UnitFamily", unitFamilySchema);
 
-module.exports = { measuringUnitSchema, MeasuringUnit };
+module.exports = { unitFamilySchema, UnitFamily };
