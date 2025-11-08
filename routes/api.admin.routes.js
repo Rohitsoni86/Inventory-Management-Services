@@ -26,7 +26,9 @@ const {
 } = require("../controllers/categoryController");
 const { verifyOrganizationJWT } = require("../middlewares/verifyJWT");
 const { measuringUnitSchema } = require("../models/measuringUnitsModel");
-
+const { ProductTypeSchema } = require("../models/productType");
+const { taxSchema } = require("../models/taxModel");
+const { taxGroupSchema } = require("../models/taxGroupModel");
 const { unitFamilySchema } = require("../models/unitFamiliyModel");
 const {
 	createUnitFamily,
@@ -43,6 +45,20 @@ const {
 	updateProductType,
 	deleteProductType,
 } = require("../controllers/productTypeController");
+const {
+	getTaxes,
+	createTax,
+	getTaxById,
+	updateTax,
+	deleteTax,
+} = require("../controllers/taxController");
+const {
+	createTaxGroup,
+	getTaxGroups,
+	getTaxGroupById,
+	updateTaxGroup,
+	deleteTaxGroup,
+} = require("../controllers/taxGroupController");
 
 const adminRouter = express.Router();
 
@@ -108,8 +124,6 @@ adminRouter.delete("/delete/unit/:id", deleteUnit);
 
 // Product Type
 
-const { ProductTypeSchema } = require("../models/productType");
-
 adminRouter.post("/create/product-type", createProductType);
 adminRouter.get(
 	"/get/product-types",
@@ -123,5 +137,38 @@ adminRouter.get(
 adminRouter.get("/get/product-type/:id", getProductTypeById);
 adminRouter.put("/update/product-type/:id", updateProductType);
 adminRouter.delete("/delete/product-type/:id", deleteProductType);
+
+// Tax
+
+adminRouter.post("/create/tax", createTax);
+adminRouter.get(
+	"/get/taxes",
+	advanceResults(taxSchema, "Tax", {
+		searchFields: ["name", "type", "status"],
+		selectableFields:
+			"name rate type effectiveFrom description status createdAt",
+	}),
+	getTaxes
+);
+adminRouter.get("/get/tax/:id", getTaxById);
+adminRouter.put("/update/tax/:id", updateTax);
+adminRouter.delete("/delete/tax/:id", deleteTax);
+
+// Tax Group
+
+adminRouter.post("/create/tax-group", createTaxGroup);
+adminRouter.get(
+	"/get/tax-groups",
+	advanceResults(taxGroupSchema, "TaxGroup", {
+		searchFields: ["name", "status"],
+		selectableFields:
+			"name totalTaxRate description effectiveFrom status createdAt",
+		populate: ["taxRates"],
+	}),
+	getTaxGroups
+);
+adminRouter.get("/get/tax-group/:id", getTaxGroupById);
+adminRouter.put("/update/tax-group/:id", updateTaxGroup);
+adminRouter.delete("/delete/tax-group/:id", deleteTaxGroup);
 
 module.exports = adminRouter;

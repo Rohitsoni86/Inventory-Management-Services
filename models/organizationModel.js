@@ -158,7 +158,18 @@ const organizationSchema = new mongoose.Schema(
 				ref: "ProductType",
 			},
 		],
-
+		taxGroups: [
+			{
+				type: mongoose.Schema.Types.ObjectId,
+				ref: "TaxGroup",
+			},
+		],
+		taxes: [
+			{
+				type: mongoose.Schema.Types.ObjectId,
+				ref: "Tax",
+			},
+		],
 		defaultStore: {
 			type: Boolean,
 			default: true,
