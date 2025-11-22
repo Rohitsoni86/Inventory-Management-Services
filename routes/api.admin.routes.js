@@ -59,6 +59,24 @@ const {
 	updateTaxGroup,
 	deleteTaxGroup,
 } = require("../controllers/taxGroupController");
+const {
+	listAttributes,
+	getAttribute,
+	createAttribute,
+	updateAttribute,
+	deleteAttribute,
+	bulkUpsertAttributes,
+	applyStoreSeed,
+	getAllAttributes,
+} = require("../controllers/attributesController");
+const { AttributeSchema } = require("../models/attributeModel");
+const {
+	createProduct,
+	getProduct,
+	listProducts,
+	updateProduct,
+	deleteProduct,
+} = require("../controllers/productController");
 
 const adminRouter = express.Router();
 
@@ -170,5 +188,35 @@ adminRouter.get(
 adminRouter.get("/get/tax-group/:id", getTaxGroupById);
 adminRouter.put("/update/tax-group/:id", updateTaxGroup);
 adminRouter.delete("/delete/tax-group/:id", deleteTaxGroup);
+
+// Attribute Master
+
+adminRouter.get("/list/attributes", listAttributes);
+adminRouter.get(
+	"/get/attributes",
+	advanceResults(AttributeSchema, "TaxGroup", {
+		searchFields: ["key", "inputType"],
+		selectableFields:
+			"key label inputType dataType options storeTypes productTypes isVariantAxis requiredOnStockEntry validation helpText order createdAt",
+	}),
+	getAllAttributes
+);
+adminRouter.get("/get/attribute/:id", getAttribute);
+adminRouter.post("/create/attribute", createAttribute);
+adminRouter.put("/update/attribute/:id", updateAttribute);
+adminRouter.delete("/delete/attribute/:id", deleteAttribute);
+
+// Bulk upsert (large edit)
+adminRouter.post("/attribute/bulk-upsert", bulkUpsertAttributes);
+
+// Apply seed for a storeType (useful when admin changes storeType)
+adminRouter.post("/attribute/apply-store-seed", applyStoreSeed);
+
+// Product
+adminRouter.post("/create/product", createProduct);
+adminRouter.get("/get/product/:id", getProduct);
+adminRouter.get("/get/products", listProducts);
+adminRouter.put("/update/product/:id", updateProduct);
+adminRouter.delete("/delete/product/:id", deleteProduct);
 
 module.exports = adminRouter;

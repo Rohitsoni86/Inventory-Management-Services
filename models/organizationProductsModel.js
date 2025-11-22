@@ -1,188 +1,83 @@
 const mongoose = require("mongoose");
-const productsSchema = new mongoose.Schema(
+const { Schema } = mongoose;
+
+const ProductSchema = new Schema(
 	{
-		name: {
-			type: String,
+		organizationId: {
+			type: Schema.Types.ObjectId,
+			ref: "Organization",
 			required: true,
-			trim: true,
-			minlength: 2,
-			maxlength: 50,
+			index: true,
 		},
-		category: {
-			type: String,
-			required: true,
-			trim: true,
-			minlength: 2,
-			maxlength: 50,
-		},
-		brand: {
-			type: String,
-			required: true,
-			trim: true,
-			minlength: 2,
-			maxlength: 50,
-		},
-		code: {
-			type: String,
-			required: true,
-			trim: true,
-			minlength: 2,
-			maxlength: 50,
-		},
-		description: {
-			type: String,
-			required: true,
-			trim: true,
-			minlength: 2,
-			maxlength: 50,
-		},
-		type: {
-			type: String,
-			required: true,
-			trim: true,
-			minlength: 2,
-			maxlength: 50,
-		},
-		cost: {
-			type: String,
-			required: true,
-			trim: true,
-			minlength: 2,
-			maxlength: 50,
-		},
-		price: {
-			type: String,
-			required: true,
-			trim: true,
-			minlength: 2,
-			maxlength: 50,
-		},
-		unit: {
-			type: String,
-			required: true,
-			trim: true,
-			minlength: 2,
-			maxlength: 50,
-		},
-		saleUnit: {
-			type: String,
-			required: true,
-			trim: true,
-			minlength: 2,
-			maxlength: 50,
-		},
-		purchaseUnit: {
-			type: String,
-			required: true,
-			trim: true,
-			minlength: 2,
-			maxlength: 50,
-		},
-		quantity: {
-			type: String,
-			required: true,
-			trim: true,
-			minlength: 2,
-			maxlength: 50,
-		},
-		imageUrl: {
-			type: String,
-			required: false,
-			trim: true,
-		},
-		countryCode: {
-			type: String,
-			required: true,
-			validate: {
-				validator: function (v) {
-					return /^\+?[1-9]\d{1,14}$/.test(v); // Validate international phone number format
-				},
-				message: "Invalid country code format",
-			},
-			default: "IN",
-		},
-		sku: {
-			type: String,
-			// required: true,
-			unique: true,
-			trim: true,
-		},
-		model: {
-			type: String,
-			// required: true,
-			trim: true,
-			minlength: 2,
-			maxlength: 50,
-		},
-		yearOfManufacture: {
-			type: Number,
-			// required: true,
-		},
-		dimensions: {
-			type: Object,
-			required: false,
-			properties: {
-				length: { type: Number },
-				width: { type: Number },
-				height: { type: Number },
-				weight: { type: Number },
-			},
-		},
-		color: {
-			type: String,
-			trim: true,
-		},
-		warranty: {
-			type: Number,
-			trim: true,
-		},
-		availabilityStatus: {
-			type: String,
-			enum: ["in stock", "out of stock", "discontinued"],
-			default: "in stock",
-		},
-		supplier: [
-			{
-				type: mongoose.Schema.Types.ObjectId,
-				ref: "Supplier",
-			},
-		],
-		compatibleVehicles: [
-			{
-				type: String,
-				// enum: ["Sedan", "SUV", "Truck", "Motorcycle","Bike"],
-			},
-		],
-		discount: {
-			type: Number, // Percentage or fixed amount
-			min: 0,
-			max: 100,
-			default: 0,
-		},
-		ratings: {
-			type: Number,
-			min: 0,
-			max: 10,
-		},
-		barcode: {
-			type: String,
-			trim: true,
-		},
-		createdAt: {
-			type: Date,
-		},
-		organizations: [
-			{ type: mongoose.Schema.Types.ObjectId, ref: "Organization" },
-		],
+
+		// basic
+		name: { type: String, required: true, trim: true },
+		sku: { type: String, trim: true },
+		code: { type: String, trim: true },
+		description: { type: String },
+
+		// relations
+		category: { type: Schema.Types.ObjectId, ref: "Category" },
+		brand: { type: Schema.Types.ObjectId, ref: "Brand" },
+		baseUnit: { type: Schema.Types.ObjectId, ref: "Unit" }, // official unit
+		saleUnit: [{ type: Schema.Types.ObjectId, ref: "Unit" }],
+		purchaseUnit: { type: Schema.Types.ObjectId, ref: "Unit" },
+		hasExpiryDate: { type: Boolean, default: false },
+		// product type + flags (persisted so product behaviour stays stable)
+		productType: { type: String },
+		productTypeCode: { type: String },
+		allowBundling: { type: Boolean, default: false },
+		allowFractionalQty: { type: Boolean, default: false },
+		hasVariants: { type: Boolean, default: false },
+		trackInventory: { type: Boolean, default: true },
+		trackBatches: { type: Boolean, default: false },
+		trackSerials: { type: Boolean, default: false },
+		productAvailability: { type: String, default: "inStock" },
+		// prices/cost
+		totalQuantity: { type: Number, default: 0 },
+		avgCostPrice: { type: Number, default: 0 },
+
+		reorderPoint: { type: Number, default: 0 },
+		reorderQty: { type: Number, default: 0 },
+
+		expiryDate: { type: Date }, // for standard products only backup
+		taxRate: { type: Number, default: 0 }, // for standard products only backup
+		sellPrice: { type: Number, default: 0 }, // for standard products only backup
+
+		// dynamic attributes
+		selectedAttributeKeys: { type: [String], default: [] },
+		attributes: { type: Schema.Types.Mixed, default: {} }, // flexible key-value mapping
+
+		// images (store urls or file refs)
+		frontImageUrl: { type: String, default: "" },
+		backImageUrl: { type: String, default: "" },
+		frontImageType: { type: String },
+		backImageType: { type: String },
+
+		createdBy: { type: Schema.Types.ObjectId, ref: "User" },
+		updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
+
+		active: { type: Boolean, default: true },
 	},
-	{
-		timestamps: true,
-	}
+	{ timestamps: true }
 );
 
-const ProductsModel = mongoose.model("Products", productsSchema);
+// Unique constraints per organization: SKU or code unique per organization
+ProductSchema.index(
+	{ organizationId: 1, sku: 1 },
+	{ unique: true, sparse: true }
+);
 
-module.exports = ProductsModel;
+// Optional: if you need to search by some attribute often (example size), create a sparse index:
+// ProductSchema.index({ "attributes.size": 1, organizationId: 1 });
+
+const ProductModel = mongoose.model("Product", ProductSchema);
+
+module.exports = { ProductSchema, ProductModel };
+
+// const ProductsModel = mongoose.model("Products", productsSchema);
+
+// module.exports = ProductsModel;
 
 // {
 //   "name": "Premium Car Battery",
@@ -259,3 +154,9 @@ module.exports = ProductsModel;
 //   "ratings": [5, 4, 5, 4, 5],
 //   "averageRating": 4.6
 // }
+
+// Schema.Types.Mixed (attributes) allows any shape. Use it because attributes are dynamic.
+
+// We created unique indexes scoped to organizationId for sku and code. Use sparse so they don't block missing values.
+
+// If you require attribute search by particular keys frequently, add specific indexes like attributes.color.

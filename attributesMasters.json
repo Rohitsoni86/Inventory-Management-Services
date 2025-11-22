@@ -1,0 +1,544 @@
+{
+	"common": [
+		{
+			"key": "sku",
+			"label": "SKU",
+			"inputType": "text",
+			"dataType": "string",
+			"productTypes": ["standard", "variable", "serialized", "batch"],
+			"isVariantAxis": false,
+			"requiredOnStockEntry": false,
+			"validation": { "required": false, "maxLength": 80 },
+			"helpText": "Unique product identifier (optional)",
+			"order": 1
+		},
+		{
+			"key": "barcode",
+			"label": "Barcode / UPC / EAN",
+			"inputType": "text",
+			"dataType": "string",
+			"productTypes": ["all"],
+			"isVariantAxis": false,
+			"validation": { "regex": "^\\d{6,14}$" },
+			"helpText": "Numeric barcode (6-14 digits suggested)",
+			"order": 2
+		},
+		{
+			"key": "brand",
+			"label": "Brand",
+			"inputType": "text",
+			"dataType": "string",
+			"productTypes": ["all"],
+			"isVariantAxis": false,
+			"helpText": "Manufacturer or brand",
+			"order": 3
+		},
+		{
+			"key": "manufacturer",
+			"label": "Manufacturer",
+			"inputType": "text",
+			"dataType": "string",
+			"productTypes": ["all"],
+			"helpText": "Company that makes the item",
+			"order": 4
+		},
+		{
+			"key": "modelNumber",
+			"label": "Model Number",
+			"inputType": "text",
+			"dataType": "string",
+			"productTypes": ["electronics", "appliance", "automobile", "all"],
+			"helpText": "Model or part number",
+			"order": 5
+		},
+		{
+			"key": "color",
+			"label": "Color",
+			"inputType": "select",
+			"dataType": "string",
+			"options": [
+				"Black",
+				"White",
+				"Red",
+				"Blue",
+				"Green",
+				"Silver",
+				"Grey",
+				"Brown"
+			],
+			"productTypes": ["variable", "standard", "clothing"],
+			"isVariantAxis": true,
+			"helpText": "Use as variant axis if needed",
+			"order": 6
+		},
+		{
+			"key": "size",
+			"label": "Size",
+			"inputType": "select",
+			"dataType": "string",
+			"options": ["XS", "S", "M", "L", "XL", "XXL"],
+			"productTypes": ["clothing", "variable"],
+			"isVariantAxis": true,
+			"helpText": "Common apparel sizes (variant axis)",
+			"order": 7
+		},
+		{
+			"key": "weight",
+			"label": "Weight",
+			"inputType": "numberWithUnit",
+			"dataType": "object",
+			"productTypes": ["all"],
+			"isVariantAxis": false,
+			"helpText": "Weight with unit (g/kg/lb)",
+			"order": 8
+		},
+		{
+			"key": "dimensions",
+			"label": "Dimensions (L×W×H)",
+			"inputType": "dimensions",
+			"dataType": "object",
+			"productTypes": ["furniture", "electronics", "all"],
+			"isVariantAxis": false,
+			"helpText": "Length, width, height with unit",
+			"order": 9
+		},
+		{
+			"key": "material",
+			"label": "Material",
+			"inputType": "text",
+			"dataType": "string",
+			"productTypes": ["all"],
+			"helpText": "Primary material (cotton, steel, wood)",
+			"order": 10
+		},
+		{
+			"key": "countryOfOrigin",
+			"label": "Country of Origin",
+			"inputType": "text",
+			"dataType": "string",
+			"productTypes": ["all"],
+			"helpText": "Country where product was manufactured",
+			"order": 11
+		},
+		{
+			"key": "hsCode",
+			"label": "HS Code",
+			"inputType": "text",
+			"dataType": "string",
+			"productTypes": ["all"],
+			"helpText": "Harmonized System code for customs",
+			"order": 12
+		},
+		{
+			"key": "minOrderQty",
+			"label": "Minimum Order Quantity",
+			"inputType": "number",
+			"dataType": "number",
+			"productTypes": ["all"],
+			"helpText": "Minimum purchase quantity for supplier orders",
+			"order": 13
+		},
+		{
+			"key": "reorderPoint",
+			"label": "Reorder Point",
+			"inputType": "number",
+			"dataType": "number",
+			"productTypes": ["all"],
+			"helpText": "Trigger threshold for reordering",
+			"order": 14
+		},
+		{
+			"key": "allowFractionalQty",
+			"label": "Allow Fractional Quantity",
+			"inputType": "boolean",
+			"dataType": "boolean",
+			"productTypes": ["all"],
+			"helpText": "Allow non-integer sales/stock (useful for weight/volume)",
+			"order": 15
+		},
+		{
+			"key": "isReturnable",
+			"label": "Is Returnable",
+			"inputType": "boolean",
+			"dataType": "boolean",
+			"productTypes": ["all"],
+			"helpText": "Can the item be returned after sale?",
+			"order": 16
+		},
+		{
+			"key": "warrantyMonths",
+			"label": "Warranty (months)",
+			"inputType": "number",
+			"dataType": "number",
+			"productTypes": ["electronics", "appliance", "automobile", "all"],
+			"helpText": "Warranty length in months",
+			"order": 17
+		},
+		{
+			"key": "packageDimensions",
+			"label": "Package Dimensions",
+			"inputType": "dimensions",
+			"dataType": "object",
+			"productTypes": ["all"],
+			"helpText": "Dimensions for shipping (L×W×H)",
+			"order": 53
+		},
+		{
+			"key": "leadTimeDays",
+			"label": "Supplier Lead Time (days)",
+			"inputType": "number",
+			"dataType": "number",
+			"productTypes": ["all"],
+			"helpText": "Expected supplier lead time in days",
+			"order": 55
+		}
+	],
+
+	"automobile": [
+		{
+			"key": "partType",
+			"label": "Part Type",
+			"inputType": "select",
+			"dataType": "string",
+			"options": [
+				"Brake",
+				"Filter",
+				"Belt",
+				"Battery",
+				"Oil",
+				"Tire",
+				"Electrical"
+			],
+			"productTypes": ["standard", "variable"],
+			"isVariantAxis": false,
+			"requiredOnStockEntry": false,
+			"validation": { "required": true },
+			"helpText": "Category of the part",
+			"order": 3
+		},
+		{
+			"key": "compatibleMakes",
+			"label": "Compatible Makes",
+			"inputType": "tags",
+			"dataType": "array",
+			"productTypes": ["standard", "variable"],
+			"helpText": "e.g., Toyota, Honda",
+			"order": 4
+		},
+		{
+			"key": "compatibleModels",
+			"label": "Compatible Models",
+			"inputType": "tags",
+			"dataType": "array",
+			"productTypes": ["standard", "variable"],
+			"helpText": "Add model names or codes",
+			"order": 5
+		},
+		{
+			"key": "vehicleYearFrom",
+			"label": "Vehicle Year From",
+			"inputType": "number",
+			"dataType": "number",
+			"validation": { "min": 1900, "max": 2100 },
+			"productTypes": ["standard"],
+			"helpText": "Start year of compatibility",
+			"order": 6
+		},
+		{
+			"key": "vehicleYearTo",
+			"label": "Vehicle Year To",
+			"inputType": "number",
+			"dataType": "number",
+			"validation": { "min": 1900, "max": 2100 },
+			"productTypes": ["standard"],
+			"helpText": "End year of compatibility",
+			"order": 7
+		},
+		{
+			"key": "engineType",
+			"label": "Engine Type",
+			"inputType": "select",
+			"dataType": "string",
+			"options": ["Petrol", "Diesel", "Hybrid", "Electric"],
+			"productTypes": ["standard"],
+			"helpText": "Compatible engine type",
+			"order": 8
+		},
+		{
+			"key": "voltage",
+			"label": "Voltage (V)",
+			"inputType": "number",
+			"dataType": "number",
+			"productTypes": ["standard", "serialized", "electronics"],
+			"helpText": "Voltage e.g., 12",
+			"order": 9
+		},
+		{
+			"key": "capacityAh",
+			"label": "Capacity (Ah)",
+			"inputType": "number",
+			"dataType": "number",
+			"productTypes": ["standard", "serialized"],
+			"helpText": "Battery capacity in Ah",
+			"order": 10
+		},
+		{
+			"key": "oilViscosity",
+			"label": "Oil Viscosity",
+			"inputType": "text",
+			"dataType": "string",
+			"productTypes": ["standard"],
+			"helpText": "e.g., 5W-30",
+			"order": 11
+		},
+		{
+			"key": "installationRequired",
+			"label": "Installation Required",
+			"inputType": "boolean",
+			"dataType": "boolean",
+			"productTypes": ["service", "bundle"],
+			"helpText": "Does this require installation?",
+			"order": 12
+		},
+		{
+			"key": "laborTimeMinutes",
+			"label": "Labor Time (mins)",
+			"inputType": "number",
+			"dataType": "number",
+			"productTypes": ["service"],
+			"helpText": "Estimated time required",
+			"order": 13
+		},
+		{
+			"key": "serviceType",
+			"label": "Service Type",
+			"inputType": "select",
+			"dataType": "string",
+			"options": [
+				"Oil Change",
+				"Wheel Alignment",
+				"Engine Tune",
+				"Battery Replacement",
+				"Tire Change"
+			],
+			"productTypes": ["service"],
+			"helpText": "Type of service rendered",
+			"order": 42
+		},
+		{
+			"key": "warrantyMonths",
+			"label": "Warranty (months)",
+			"inputType": "number",
+			"dataType": "number",
+			"productTypes": ["standard", "serialized"],
+			"helpText": "Warranty period in months",
+			"order": 14
+		}
+	],
+
+	"supermarket": [
+		{
+			"key": "packSize",
+			"label": "Pack Size",
+			"inputType": "text",
+			"dataType": "string",
+			"productTypes": ["standard"],
+			"helpText": "e.g., 6 x 330ml",
+			"order": 19
+		},
+		{
+			"key": "netWeight",
+			"label": "Net Weight",
+			"inputType": "numberWithUnit",
+			"dataType": "object",
+			"productTypes": ["standard", "batch"],
+			"helpText": "Net weight per unit",
+			"order": 20
+		},
+		{
+			"key": "grossWeight",
+			"label": "Gross Weight",
+			"inputType": "numberWithUnit",
+			"dataType": "object",
+			"productTypes": ["all"],
+			"helpText": "Shipping weight including packaging",
+			"order": 21
+		},
+		{
+			"key": "ingredients",
+			"label": "Ingredients",
+			"inputType": "textarea",
+			"dataType": "string",
+			"productTypes": ["standard", "batch"],
+			"helpText": "Ingredients / composition",
+			"order": 22
+		},
+		{
+			"key": "allergens",
+			"label": "Allergens",
+			"inputType": "multiselect",
+			"dataType": "array",
+			"options": ["Gluten", "Nuts", "Dairy", "Soy", "Eggs", "Sesame"],
+			"productTypes": ["standard", "batch"],
+			"helpText": "Common allergens to display",
+			"order": 23
+		},
+		{
+			"key": "expiryDate",
+			"label": "Expiry Date",
+			"inputType": "date",
+			"dataType": "date",
+			"productTypes": ["batch"],
+			"requiredOnStockEntry": true,
+			"validation": { "required": true },
+			"helpText": "Expiry date — capture on stock entry",
+			"order": 24
+		},
+		{
+			"key": "batchCode",
+			"label": "Batch / Lot Number",
+			"inputType": "text",
+			"dataType": "string",
+			"productTypes": ["batch"],
+			"requiredOnStockEntry": true,
+			"validation": { "required": true },
+			"helpText": "Batch or lot number — required on receipt",
+			"order": 25
+		},
+		{
+			"key": "shelfLifeMonths",
+			"label": "Shelf Life (months)",
+			"inputType": "number",
+			"dataType": "number",
+			"productTypes": ["batch"],
+			"helpText": "Shelf life used for planning",
+			"order": 45
+		},
+		{
+			"key": "isOrganic",
+			"label": "Organic",
+			"inputType": "boolean",
+			"dataType": "boolean",
+			"productTypes": ["standard"],
+			"helpText": "Is product certified organic?",
+			"order": 46
+		}
+	],
+
+	"pharmacy": [
+		{
+			"key": "activeIngredient",
+			"label": "Active Ingredient",
+			"inputType": "text",
+			"dataType": "string",
+			"productTypes": ["batch", "standard"],
+			"helpText": "Main active compound",
+			"order": 2
+		},
+		{
+			"key": "strength",
+			"label": "Strength / Concentration",
+			"inputType": "numberWithUnit",
+			"dataType": "object",
+			"productTypes": ["batch", "standard"],
+			"helpText": "e.g., 500 mg",
+			"order": 27
+		},
+		{
+			"key": "dosageForm",
+			"label": "Dosage Form",
+			"inputType": "select",
+			"dataType": "string",
+			"options": ["Tablet", "Capsule", "Syrup", "Injection", "Cream"],
+			"productTypes": ["batch", "standard"],
+			"helpText": "Form of medicine",
+			"order": 26
+		},
+		{
+			"key": "prescriptionRequired",
+			"label": "Prescription Required",
+			"inputType": "boolean",
+			"dataType": "boolean",
+			"productTypes": ["batch", "standard"],
+			"helpText": "Is a prescription required to dispense?",
+			"order": 28
+		},
+		{
+			"key": "storageTempMin",
+			"label": "Storage Temp Min (°C)",
+			"inputType": "number",
+			"dataType": "number",
+			"productTypes": ["batch", "standard"],
+			"helpText": "Minimum storage temperature",
+			"order": 29
+		},
+		{
+			"key": "storageTempMax",
+			"label": "Storage Temp Max (°C)",
+			"inputType": "number",
+			"dataType": "number",
+			"productTypes": ["batch", "standard"],
+			"helpText": "Maximum storage temperature",
+			"order": 30
+		},
+		{
+			"key": "controlledSubstance",
+			"label": "Controlled Substance",
+			"inputType": "boolean",
+			"dataType": "boolean",
+			"productTypes": ["batch", "standard"],
+			"helpText": "Flag for special handling",
+			"order": 9
+		}
+	],
+
+	"general": [
+		{
+			"key": "isbn",
+			"label": "ISBN",
+			"inputType": "text",
+			"dataType": "string",
+			"productTypes": ["standard"],
+			"helpText": "ISBN for books",
+			"order": 48
+		},
+		{
+			"key": "author",
+			"label": "Author(s)",
+			"inputType": "text",
+			"dataType": "string",
+			"productTypes": ["standard"],
+			"helpText": "Book author(s)",
+			"order": 49
+		},
+		{
+			"key": "pages",
+			"label": "Number of Pages",
+			"inputType": "number",
+			"dataType": "number",
+			"productTypes": ["standard"],
+			"helpText": "Page count",
+			"order": 50
+		},
+		{
+			"key": "colorFamily",
+			"label": "Color Family / Finish",
+			"inputType": "select",
+			"dataType": "string",
+			"options": ["Matte", "Gloss", "Satin", "Brushed"],
+			"productTypes": ["standard", "variable"],
+			"isVariantAxis": true,
+			"helpText": "Paint / finish type",
+			"order": 51
+		},
+		{
+			"key": "assemblyRequired",
+			"label": "Assembly Required",
+			"inputType": "boolean",
+			"dataType": "boolean",
+			"productTypes": ["furniture", "home"],
+			"helpText": "Requires assembly at delivery",
+			"order": 52
+		}
+	]
+}
