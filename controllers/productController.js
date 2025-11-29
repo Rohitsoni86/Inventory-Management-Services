@@ -459,10 +459,71 @@ const deleteProduct = asyncHandler(async (req, res, next) => {
 	res.json({ success: true, message: "Product deleted" });
 });
 
+// category// brand // productType // keyword (name, code, sku) // lowStockOnly // hasExpiryDate // hasBatches // hasSerials // minQty / maxQty // attributes:
+const searchProducts = asyncHandler(async (req, res, next) => {
+	const organizationId = req.organizationId;
+	const {
+		search: keyword,
+		category,
+		brand,
+		productType,
+		lowStockOnly,
+		hasExpiryDate,
+		hasSerials,
+		hasBatches,
+		minQty,
+		maxQty,
+	} = req.query;
+
+	console.log("Received Query ==>", req.query);
+
+	const query = { organizationId, active: true };
+
+	if (keyword) {
+		const reg = new RegExp(keyword, "i");
+		query.$or = [{ name: reg }, { code: reg }, { sku: reg }];
+	}
+
+	if (category) query.category = category;
+	if (brand) query.brand = brand;
+	if (productType) query.productType = productType;
+
+	if (hasExpiryDate === "true") query.expiryDate = { $ne: null };
+	if (hasBatches === "true") query.trackBatches = true;
+	if (hasSerials === "true") query.trackSerials = true;
+
+	if (lowStockOnly === "true") query.totalQuantity = { $lte: 5 };
+
+	if (minQty || maxQty) {
+		query.totalQuantity = {};
+		if (minQty) query.totalQuantity.$gte = Number(minQty);
+		if (maxQty) query.totalQuantity.$lte = Number(maxQty);
+	}
+
+	// attribute filters
+	if (req.query.attributes) {
+		const attrFilters = req.query.attributes;
+
+		for (const key in attrFilters) {
+			query[`attributes.${key}`] = attrFilters[key];
+		}
+	}
+
+	const data = await Product.find(query)
+		.populate("category", "name")
+		.populate("brand", "name")
+		.populate("baseUnit", "name")
+		.populate("saleUnit", "name")
+		.populate("purchaseUnit", "name");
+
+	res.json({ success: true, data });
+});
+
 module.exports = {
 	createProduct,
 	getProduct,
 	listProducts,
 	updateProduct,
 	deleteProduct,
+	searchProducts,
 };

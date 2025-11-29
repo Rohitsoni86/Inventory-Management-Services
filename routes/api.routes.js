@@ -15,4 +15,9 @@ router.use(
 router.use("/admin", require("./api.superAdmin.routes"));
 router.use("/organization/employee", require("./api.employee.routes"));
 
+// POS
+router.use(verifyOrganizationJWT);
+router.use("/organization/products", require("./api.product.routes"));
+router.use("/organization/pos", require("./api.sales.routes"));
+
 module.exports = router;
