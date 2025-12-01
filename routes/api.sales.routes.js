@@ -15,7 +15,7 @@ salesRouter.get("/products/search", searchPOSProducts);
 
 salesRouter.post("/create/sales", createSale);
 
-salesRouter.get("/sales", listSales);
+salesRouter.get("/sales/list", listSales);
 salesRouter.get("/sales/next-invoice-number", getNextInvoiceNumber);
 salesRouter.get("/sales/invoice/:id", getSaleInvoice);
 

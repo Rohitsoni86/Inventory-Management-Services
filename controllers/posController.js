@@ -658,6 +658,7 @@ const listSales = asyncHandler(async (req, res, next) => {
 		dateFrom,
 		dateTo,
 		productId,
+		productName,
 		customerName,
 		invoiceNumber,
 		minAmount,
@@ -684,6 +685,11 @@ const listSales = asyncHandler(async (req, res, next) => {
 	// Filter by product inside invoice lines
 	if (productId) {
 		query["lines.productId"] = productId;
+	}
+
+	// Filter by product name inside invoice lines
+	if (productName) {
+		query["lines.productName"] = new RegExp(productName, "i");
 	}
 
 	const skip = (Number(page) - 1) * Number(limit);
