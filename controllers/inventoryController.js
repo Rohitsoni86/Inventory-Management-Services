@@ -31,6 +31,8 @@ const addStock = asyncHandler(async (req, res, next) => {
 		unitCost, // Cost per item for this specific purchase
 		unitPrice, // (Optional) If selling price changes with this batch
 		supplier, // (Optional) Vendor name
+		isSamePrice = true, // (Optional) If all items have same cost
+		taxRate,
 		referenceNumber, // (Optional) PO Number or Invoice Number
 		batches = [], // If batched
 		serials = [], // If serialized
@@ -40,7 +42,7 @@ const addStock = asyncHandler(async (req, res, next) => {
 	const performedBy = req.user.id;
 	const organizationId = req.organizationId;
 
-	// 1. Fetch Product
+	// Fetching Product from DB to get idea for the product type and related info
 	const product = await Product.findOne({ _id: productId, organizationId });
 	if (!product) {
 		return next(new ErrorResponse("Product not found", 404));
@@ -50,6 +52,10 @@ const addStock = asyncHandler(async (req, res, next) => {
 	let totalValueAdded = 0;
 	const transactionType = "PURCHASE";
 	const dateNow = new Date();
+
+	console.log("🔻🔺🔺Received Values 🔻🔺🔺", req.body);
+
+	// return next(new ErrorResponse("Product found", 303));
 
 	// --- LOGIC PER PRODUCT TYPE ---
 
@@ -62,8 +68,8 @@ const addStock = asyncHandler(async (req, res, next) => {
 		}
 
 		for (const batch of batches) {
-			const bQty = Number(batch.batchQuantity);
-			const bCost = Number(batch.batchCostPrice);
+			const bQty = Number(batch.quantity);
+			const bCost = Number(batch.unitCost);
 
 			// Create Batch
 			const newBatch = await BatchModel.create({
@@ -71,8 +77,10 @@ const addStock = asyncHandler(async (req, res, next) => {
 				productId,
 				batchID: batch.batchID,
 				expiryDate: convertDateFormat(batch.expiryDate),
+				purchaseDate: convertDateFormat(batch.purchaseDate),
+				batchTaxRate: batch.taxRate,
 				batchCostPrice: bCost,
-				batchSellingPrice: batch.batchSellingPrice || product.sellPrice,
+				batchSellingPrice: batch.unitPrice,
 				initialQuantity: bQty,
 				currentQuantity: bQty,
 				isActive: true,
@@ -124,19 +132,20 @@ const addStock = asyncHandler(async (req, res, next) => {
 		const serialDocs = serials.map((s) => ({
 			organizationId,
 			productId,
-			serialNumber: s.serial,
-			costPrice: Number(unitCost), // Cost is usually uniform for a purchase shipment
-			sellPrice: Number(unitPrice || product.sellPrice),
+			serialNumber: s.serialNumber,
+			costPrice: Number(s.costPrice), // Cost is usually uniform for a purchase shipment
+			sellPrice: Number(s.sellPrice),
 			status: "AVAILABLE",
 			currentLocation: s.locationId,
 			entryDate: dateNow,
 			createdBy: performedBy,
+			taxRate: s.taxRate,
 		}));
 
 		await SerialModel.create(serialDocs);
 
 		totalQtyAdded = serials.length;
-		totalValueAdded = totalQtyAdded * Number(unitCost);
+		totalValueAdded = totalQtyAdded * Number(serials[0].costPrice);
 
 		// Ledger Entry (Summary for Serials)
 		await InventoryLedgerModel.create({
@@ -144,7 +153,7 @@ const addStock = asyncHandler(async (req, res, next) => {
 			productId,
 			quantityChange: totalQtyAdded,
 			transactionType,
-			unitCost: Number(unitCost),
+			unitCost: Number(serials[0].costPrice),
 			referenceId: referenceNumber || "PURCHASE",
 			performedBy,
 		});
@@ -173,7 +182,13 @@ const addStock = asyncHandler(async (req, res, next) => {
 		if (stdStock) {
 			stdStock.currentQuantity += totalQtyAdded;
 			// Optionally update cost if you want the "latest" cost in this model
-			stdStock.costPrice = Number(unitCost);
+			if (isSamePrice == false) {
+				// if received at different costs, update to latest
+				stdStock.costPrice = Number(unitCost);
+				stdStock.sellPrice = Number(unitPrice || product.sellPrice);
+				stdStock.taxRate = taxRate;
+			}
+
 			await stdStock.save();
 		} else {
 			// Should exist from creation, but safety check:

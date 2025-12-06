@@ -19,5 +19,6 @@ router.use("/organization/employee", require("./api.employee.routes"));
 router.use(verifyOrganizationJWT);
 router.use("/organization/products", require("./api.product.routes"));
 router.use("/organization/pos", require("./api.sales.routes"));
+router.use("/organization/inventory", require("./api.inventory.routes"));
 
 module.exports = router;

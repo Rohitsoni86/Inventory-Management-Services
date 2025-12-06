@@ -1,10 +1,13 @@
 const express = require("express");
 
-const advanceResults = require("../middlewares/advanceResult");
-const { searchProducts } = require("../controllers/productController");
+const {
+	searchProducts,
+	getProductDetails,
+} = require("../controllers/productController");
 
 const productRouter = express.Router();
 
-productRouter.get("/organization/products/search", searchProducts);
+productRouter.get("/search", searchProducts);
+productRouter.get("/get/product/:id", getProductDetails);
 
 module.exports = productRouter;

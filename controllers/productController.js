@@ -519,9 +519,62 @@ const searchProducts = asyncHandler(async (req, res, next) => {
 	res.json({ success: true, data });
 });
 
+const getProductDetails = asyncHandler(async (req, res, next) => {
+	const { id } = req.params;
+	const organizationId = req.organizationId;
+
+	if (!mongoose.Types.ObjectId.isValid(id)) {
+		return next(new ErrorResponse("Invalid product ID", 400));
+	}
+
+	const product = await Product.findOne({ _id: id, organizationId })
+		.populate("category", "name -_id")
+		.populate("brand", "name -_id")
+		.populate("baseUnit", "name shortName -_id")
+		.populate("saleUnit", "name shortName -_id")
+		.populate("purchaseUnit", "name shortName -_id")
+		.lean();
+
+	if (!product) {
+		return next(new ErrorResponse("Product not found", 404));
+	}
+
+	let inventoryDetails = {
+		batches: [],
+		serials: [],
+		standard: null,
+	};
+
+	if (product.trackBatches) {
+		inventoryDetails.batches = await BatchModel.find({
+			productId: product._id,
+			organizationId,
+		}).lean();
+	} else if (product.trackSerials) {
+		inventoryDetails.serials = await SerialModel.find({
+			productId: product._id,
+			organizationId,
+		}).lean();
+	} else if (product.trackInventory) {
+		inventoryDetails.standard = await StandardInventoryProductModel.findOne({
+			productId: product._id,
+			organizationId,
+		}).lean();
+	}
+
+	res.json({
+		success: true,
+		data: {
+			...product,
+			inventoryDetails,
+		},
+	});
+});
+
 module.exports = {
 	createProduct,
 	getProduct,
+	getProductDetails,
 	listProducts,
 	updateProduct,
 	deleteProduct,

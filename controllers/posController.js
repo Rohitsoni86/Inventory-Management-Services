@@ -749,8 +749,6 @@ const getNextInvoiceNumber = asyncHandler(async (req, res, next) => {
 	res.json({ success: true, data: nextInvoice });
 });
 
-// build a function that gives customers details with mathing phoneNo or search by name or phoneNo
-
 const searchCustomers = asyncHandler(async (req, res, next) => {
 	const organizationId = req.organizationId;
 	const { search } = req.query; // Can be phoneNo or part of name
