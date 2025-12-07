@@ -102,7 +102,7 @@ const organizationSchema = new mongoose.Schema(
 		},
 		updatedBy: {
 			type: mongoose.Schema.Types.ObjectId,
-			ref: "Admin",
+			ref: "User",
 		},
 		admins: [
 			{

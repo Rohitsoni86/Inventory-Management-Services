@@ -12,7 +12,7 @@ dotenv.config({ path: "../config/config.env" });
 const CryptoJS = require("crypto-js");
 const jwt = require("jsonwebtoken");
 const logger = require("../middlewares/custom-logger");
-const User = require("../models/userModel");
+const { UserModel: User } = require("../models/userModel");
 const speakeasy = require("speakeasy");
 const qrcode = require("qrcode");
 const Joi = require("joi");
@@ -44,6 +44,7 @@ const registerSchema = Joi.object({
 		confirmPassword: Joi.string().min(8).optional(),
 		countryCode: Joi.string().required(),
 		flagCode: Joi.string().max(2).required(),
+		gender: Joi.string().optional(),
 		phone: Joi.string()
 			.pattern(/^\d{10,15}$/)
 			.required(),
@@ -404,7 +405,7 @@ const RefreshUserToken = async (req, res, next) => {
 				// 	? process.env.ADMIN_ACCESS_TOKEN_SECRET
 				// 	: process.env.EMPLOYEE_ACCESS_TOKEN_SECRET,
 				process.env.ACCESS_TOKEN_SECRET,
-				{ algorithm: "HS256", expiresIn: "15m" } // Adjust expiration as necessary
+				{ algorithm: "HS256", expiresIn: "1d" } // Adjust expiration as necessary
 			);
 
 			// Set the new access token in a secure cookie
@@ -412,7 +413,7 @@ const RefreshUserToken = async (req, res, next) => {
 				httpOnly: true, //accessible only by web server
 				secure: true, // Use HTTPS for security
 				sameSite: "None", // For cross-site cookies
-				maxAge: 15 * 60 * 1000, // Same as the access token expiration (15 minutes)
+				maxAge: 24 * 60 * 60 * 1000, // Same as the access token expiration (24 hours)
 			});
 
 			// Respond with the new access token
@@ -437,8 +438,8 @@ const VerifyUserAuth = asyncHandler(async (req, res, next) => {
 	console.log("Founded User ==>", req.user, organizationId);
 	// let isAdmin = false;
 
-	// Check if the user is an Admin
-	if (req.user.roles.includes("admin")) {
+	// Check if the user is present
+	if (req.user.roles.length > 0) {
 		user = await User.findById(id).populate("organizations", "legalName"); // Use User model
 	}
 
@@ -468,13 +469,17 @@ const VerifyUserAuth = asyncHandler(async (req, res, next) => {
 		});
 	}
 
+	let userName = `${user.firstName} ${
+		user.middleName ? user.middleName + " " : ""
+	}${user.lastName}`;
+
 	// If user is found and active, & orag is also found pass on to the next middleware or route handler
 	res.status(200).json({
 		success: true,
 		data: "User Authenticated Successfully",
 		id,
 		roles: req.user.roles, // Roles from token payload
-		username: req.user.username,
+		username: userName,
 		email: user.email,
 		organizationDetails: foundOrganization,
 	});

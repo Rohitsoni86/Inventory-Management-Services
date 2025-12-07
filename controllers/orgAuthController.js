@@ -16,7 +16,7 @@ const speakeasy = require("speakeasy");
 const qrcode = require("qrcode");
 const jwt = require("jsonwebtoken");
 const logger = require("../middlewares/custom-logger");
-const User = require("../models/userModel");
+const { UserModel: User } = require("../models/userModel");
 
 const loginUser = asyncHandler(async (req, res, next) => {
 	const { email, password } = req.body;

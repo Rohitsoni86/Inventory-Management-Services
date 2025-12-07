@@ -14,27 +14,86 @@ const speakeasy = require("speakeasy");
 const qrcode = require("qrcode");
 const jwt = require("jsonwebtoken");
 const logger = require("../middlewares/custom-logger");
+const Joi = require("joi");
+const { UserModel: User } = require("../models/userModel");
+const Organization = require("../models/organizationModel");
+
+const employeeRegValidationSchema = Joi.object({
+	employeeCode: Joi.string().required(),
+	honorific: Joi.string().optional(),
+	firstName: Joi.string().min(2).max(50).required(),
+	middleName: Joi.string().min(2).max(50).optional().allow(null, ""),
+	lastName: Joi.string().min(2).max(50).required().allow(null, ""),
+	email: Joi.string().email().required(),
+	countryCode: Joi.string()
+		.pattern(/^\+?[1-9]\d{1,14}$/)
+		.optional(),
+	gender: Joi.string().optional(),
+	phone: Joi.string()
+		.pattern(/^\d{10,15}$/)
+		.required(),
+	address: Joi.string().required(),
+	city: Joi.string().required(),
+	state: Joi.string().required(),
+	country: Joi.string().required(),
+	postalCode: Joi.string().required(),
+});
+
+async function generateEmployeeCode(organizationId) {
+	const last = await User.findOne({
+		organizations: organizationId,
+	})
+		.sort({ createdAt: -1 })
+		.select("employeeCode")
+		.lean();
+
+	if (!last || !last.employeeCode) {
+		return "EMPL-0001";
+	}
+
+	const match = last.employeeCode.match(/(\d+)$/);
+	if (!match) return `${last.employeeCode}-1`;
+	const nextNum = String(parseInt(match[1], 10) + 1).padStart(4, "0");
+	return `EMP-${nextNum}`;
+}
 
 const createEmployee = asyncHandler(async (req, res, next) => {
 	console.log("Create Employee Called", req.body);
+	const organizationId = req.organizationId;
+	const { user } = req;
+
+	//check for admin role and manager role
+	if (!user.roles.includes("admin") && !user.roles.includes("manager")) {
+		return next(
+			new ErrorResponse("You are not authorized to create an employee", 403)
+		);
+	}
+
 	const {
-		name,
+		employeeCode = "",
 		honorific,
+		firstName,
+		middleName,
+		lastName,
 		gender,
-		roles,
-		alternatePhoneNo,
-		// credentials,
-		password,
-		phoneNo,
 		email,
-		active,
-		// createdAt,
+		countryCode,
+		password = "",
+		flagCode = "IN",
+		roles = ["employee"],
+		address,
+		city,
+		state,
+		country,
+		postalCode,
 		currentLocation,
 		organizations,
-		// refreshToken,
+		alternatePhone,
+		phone,
+		active,
 	} = req.body;
 
-	const encryptionKey = "rohit-soni-86";
+	// const encryptionKey = "rohit-soni-86";
 
 	try {
 		// Decrypt credentials
@@ -57,362 +116,370 @@ const createEmployee = asyncHandler(async (req, res, next) => {
 		// }
 
 		// Validate the parsed credentials
-		if (!phoneNo || !password || !Array.isArray(roles) || !roles.length) {
-			return next(new ErrorResponse(`All fields are required`, 400));
+
+		const { error } = employeeRegValidationSchema.validate(req.body);
+		if (error) {
+			return next(
+				new ErrorResponse(`Validation Error: ${error.details[0].message}`, 400)
+			);
 		}
+
+		// find if user already exists
+
+		const userExists = await User.findOne({
+			email,
+			organizations: organizationId,
+		});
+
+		if (userExists) {
+			return next(
+				new ErrorResponse("User with this email already exists", 400)
+			);
+		}
+
+		// generate employee code
+
+		let employeeCode = await generateEmployeeCode(organizationId);
 
 		// Hash password
-		const hashedPwd = await bcryptjs.hash(password, 10); // salt rounds
+		// create password by combining email name and employee code
+		if (!password) {
+			// Generate a default password if not provided
+			const defaultPassword = `${firstName.toLowerCase()}@${employeeCode}`; // Example: john@123
+			password = defaultPassword;
+		}
+
+		const hashedPwd = await bcryptjs.hash(password, 10);
 		const createdDate = moment(new Date()).format("YYYY-MM-DD hh:mm:ss");
 
-		const userObject = {
-			name,
-			email,
-			honorific,
-			gender,
-			phoneNo,
-			roles,
-			alternatePhoneNo,
-			password: hashedPwd,
-			active,
-			mfaEnabled: false,
-			mfaSecret: "",
-			currentLocation,
-			organizations,
-			refreshToken: "",
-			createdAt: createdDate,
-		};
+		const session = await mongoose.startSession();
+		session.startTransaction();
 
-		const empUser = await EmployeeUserModel.create(userObject);
-		console.log("Employee Created", empUser);
-		if (empUser) {
-			res.status(201).json({
-				success: true,
-				data: userObject,
-				message: `Employee Created !`,
-			});
-		} else {
-			return next(new ErrorResponse("Error processing the request", 500));
+		const [userDoc] = await User.create(
+			[
+				{
+					employeeCode,
+					honorific,
+					firstName,
+					middleName,
+					lastName,
+					gender,
+					email,
+					countryCode,
+					active,
+					password: hashedPwd,
+					flagCode,
+					roles,
+					address,
+					city,
+					state,
+					country,
+					postalCode,
+					currentLocation,
+					organizations,
+					alternatePhone,
+					phone,
+				},
+			],
+
+			{ session }
+		);
+
+		// now add this user to organization employees list
+
+		const organization = await Organization.findById(organizationId).session(
+			session
+		);
+		if (!organization) {
+			await session.abortTransaction();
+			session.endSession();
+			return next(new ErrorResponse("Organization not found", 404));
 		}
+
+		organization.employees.push(userDoc._id);
+		await organization.save({ session });
+
+		await session.commitTransaction();
+
+		logger.info(
+			`Employee created: ${userDoc._id} in organization: ${organizationId}`
+		);
+
+		res.status(201).json({
+			success: true,
+			data: userDoc,
+			message: "Employee created successfully!",
+		});
 	} catch (err) {
 		console.log("Error", err);
-
+		logger.error(`Error creating employee: ${err.message}`);
 		return next(new ErrorResponse("Error processing the request", 500));
+	} finally {
+		session.endSession();
 	}
 });
 
-const loginEmployee = asyncHandler(async (req, res, next) => {
-	const { email, password } = req.body;
+const getEmployees = asyncHandler(async (req, res, next) => {
+	const { user, organizationId } = req;
 
-	if (!email || !password) {
-		return res.status(400).json({ message: "All fields are required" });
+	if (!user.roles.includes("admin") && !user.roles.includes("manager")) {
+		return next(
+			new ErrorResponse("You are not authorized to view employees", 403)
+		);
 	}
-	console.log("Founded Email Password", email, password);
+
 	try {
-		const foundUser = await EmployeeUserModel.findOne({ email });
+		res.status(200).json({
+			...res.advanceResults,
+		});
+	} catch (error) {
+		next(new ErrorResponse(error.message), 500);
+	}
+});
 
-		if (!foundUser || foundUser.active === false) {
-			return next(new ErrorResponse("Invalid credentials", 401));
-		}
+// @desc    Get single employee by ID
+// @route   GET /api/v1/employees/:id
+// @access  Private
+const getEmployeeById = asyncHandler(async (req, res, next) => {
+	const { organizationId } = req;
+	const { id } = req.params;
 
-		console.log("Founded User", foundUser);
-		const match = await bcryptjs.compare(password, foundUser.password);
-		console.log("Match Password", match);
+	if (!mongoose.Types.ObjectId.isValid(id)) {
+		return next(new ErrorResponse(`Invalid employee ID: ${id}`, 400));
+	}
 
-		if (!match) {
-			return res.status(401).json({ message: "Unauthorized" });
-		}
-		const accessToken = jwt.sign(
+	try {
+		const employee = await User.findOne(
 			{
-				UserInfo: {
-					username: foundUser.email,
-					roles: foundUser.roles,
-					id: foundUser.id,
-				},
+				_id: id,
+				organizations: organizationId,
+				roles: { $in: ["employee", "manager"] },
 			},
-			process.env.ACCESS_TOKEN_SECRET,
-			{ algorithm: "HS256", expiresIn: "60m" }
+			{
+				password: 0,
+				refreshToken: 0,
+				mfaSecret: 0,
+				mfaEnabled: 0,
+				__v: 0,
+				updatedAt: 0,
+				createdAt: 0,
+			}
 		);
 
-		const refreshToken = jwt.sign(
-			{ email: foundUser.email, tname: req.params.hospitalId },
-			process.env.REFRESH_TOKEN_SECRET,
-			{ algorithm: "HS256", expiresIn: "1d" }
-		);
-
-		// Saving refreshToken with current user
-		foundUser.refreshToken = refreshToken;
-		const result = await foundUser.save();
-		const config = {
-			headers: {
-				Cookie: `accessToken=${accessToken}`,
-			},
-		};
-
-		res.cookie("accessToken", accessToken, {
-			httpOnly: true, //accessible only by web server
-			secure: true, //https
-			sameSite: "None", //cross-site cookie
-			maxAge: 7 * 24 * 60 * 60 * 1000,
-		});
-
-		// Create secure cookie with refresh token
-		const isLocalhost =
-			req.headers.origin &&
-			(req.headers.origin.includes("localhost:3000") ||
-				req.headers.origin.endsWith(".localhost:3000"));
-		const isSecure =
-			req.secure ||
-			(isLocalhost && req.headers["x-forwarded-proto"] === "https");
-
-		res.cookie("refreshToken", refreshToken, {
-			httpOnly: true,
-			secure: true,
-			sameSite: isLocalhost ? "None" : "Strict",
-			maxAge: 24 * 60 * 60 * 1000,
-		});
-
-		res.cookie("accessToken", accessToken, {
-			httpOnly: true, //accessible only by web server
-			secure: true,
-			sameSite: isLocalhost ? "None" : "Strict",
-			maxAge: 60 * 60 * 1000,
-		});
+		if (!employee) {
+			return next(new ErrorResponse(`Employee not found !`, 404));
+		}
 
 		res.status(200).json({
 			success: true,
-			// roles,
-			accessToken,
-			refreshToken: refreshToken,
-			id: foundUser._id,
-			username: foundUser.name,
-			email: foundUser.email,
+			data: employee,
 		});
 	} catch (err) {
-		console.log("Catching Error", err);
-		return next(new ErrorResponse("Internal Server Error", 500));
+		logger.error(`Error fetching employee ${id}: ${err.message}`);
+		return next(new ErrorResponse("Error fetching employee", 500));
 	}
 });
 
-// verify Employee
-const verifyEmployee = asyncHandler(async (req, res, next) => {
-	const { id } = req.user;
-	const token = req.cookies.accessToken;
-	if (!token) {
-		return res.status(403).json({ success: false, data: "Invalid Token" });
+// @desc    Update employee
+// @route   PUT /api/v1/employees/:id
+// @access  Private (Admin, Employee)
+const updateEmployee = asyncHandler(async (req, res, next) => {
+	const { user, organizationId } = req;
+	const { id } = req.params;
+
+	if (!mongoose.Types.ObjectId.isValid(id)) {
+		return next(new ErrorResponse(`Invalid employee ID: ${id}`, 400));
 	}
 
-	const user = await EmployeeUserModel.findById(id);
-	if (user.active == false) {
-		return res.status(401).json({ message: "USER BANNED" });
+	// Create a validation schema for updates (optional fields)
+	const employeeUpdateValidationSchema = Joi.object({
+		honorific: Joi.string().optional(),
+		firstName: Joi.string().min(2).max(50).optional(),
+		middleName: Joi.string().max(50).optional().allow(null, ""),
+		lastName: Joi.string().max(50).optional().allow(null, ""),
+		gender: Joi.string().optional(),
+		countryCode: Joi.string()
+			.pattern(/^\+?[1-9]\d{1,14}$/)
+			.optional(),
+		phone: Joi.string()
+			.pattern(/^\d{10,15}$/)
+			.optional(),
+		address: Joi.string().optional(),
+		city: Joi.string().optional(),
+		state: Joi.string().optional(),
+		country: Joi.string().optional(),
+		postalCode: Joi.string().optional(),
+		roles: Joi.array().items(Joi.string()).optional(),
+		active: Joi.boolean().optional(),
+		email: Joi.string().email().optional(),
+		flagCode: Joi.string().optional(),
+		currentLocation: Joi.string().optional().allow(null, ""),
+		organizations: Joi.array().items(Joi.string()).optional(),
+		alternatePhone: Joi.string()
+			.pattern(/^\d{10,15}$/)
+			.optional()
+			.allow(null, ""),
+
+		// email and employeeCode are usually not updatable
+	}).min(1); // Require at least one field to be updated
+
+	try {
+		const { error } = employeeUpdateValidationSchema.validate(req.body);
+		if (error) {
+			return next(
+				new ErrorResponse(`Validation Error: ${error.details[0].message}`, 400)
+			);
+		}
+
+		let employee = await User.findOne({
+			_id: id,
+			organizations: organizationId,
+			roles: { $in: ["employee", "manager"] },
+		});
+
+		if (!employee) {
+			return next(
+				new ErrorResponse(`Employee not found with id of ${id}`, 404)
+			);
+		}
+
+		// Prevent email from being updated if it exists in the body
+		if (req.body.email) {
+			delete req.body.email;
+		}
+
+		employee = await User.findByIdAndUpdate(id, req.body, {
+			new: true,
+			runValidators: true,
+		});
+
+		logger.info(`Employee updated: ${employee._id}`);
+
+		res.status(200).json({
+			success: true,
+			data: employee,
+			message: "Employee updated successfully!",
+		});
+	} catch (err) {
+		logger.error(`Error updating employee ${id}: ${err.message}`);
+		return next(new ErrorResponse("Error updating employee", 500));
 	}
-	if (!user) {
-		return res.status(403).json({ error: "You must be logged In." });
-	}
-	const accessToken = jwt.sign(
-		{
-			UserInfo: {
-				username: foundUser.email,
-				roles: foundUser.roles,
-				id: foundUser.id,
-			},
-		},
-		process.env.ACCESS_TOKEN_SECRET,
-		{ algorithm: "HS256", expiresIn: "60m" }
-	);
-
-	const refreshToken = jwt.sign(
-		{ email: foundUser.email },
-		process.env.REFRESH_TOKEN_SECRET,
-		{ algorithm: "HS256", expiresIn: "1d" }
-	);
-
-	// Saving refreshToken with current user
-	foundUser.refreshToken = refreshToken;
-	const result = await foundUser.save();
-	const config = {
-		headers: {
-			Cookie: `accessToken=${accessToken}`,
-		},
-	};
-
-	res.cookie("accessToken", accessToken, {
-		httpOnly: true, //accessible only by web server
-		secure: true, //https
-		sameSite: "None", //cross-site cookie
-		maxAge: 7 * 24 * 60 * 60 * 1000,
-	});
-
-	// Create secure cookie with refresh token
-	const isLocalhost =
-		req.headers.origin &&
-		(req.headers.origin.includes("localhost:3000") ||
-			req.headers.origin.endsWith(".localhost:3000"));
-	const isSecure =
-		req.secure || (isLocalhost && req.headers["x-forwarded-proto"] === "https");
-
-	res.cookie("refreshToken", refreshToken, {
-		httpOnly: true,
-		secure: true,
-		sameSite: isLocalhost ? "None" : "Strict",
-		maxAge: 24 * 60 * 60 * 1000,
-	});
-
-	res.cookie("accessToken", accessToken, {
-		httpOnly: true, //accessible only by web server
-		secure: true,
-		sameSite: isLocalhost ? "None" : "Strict",
-		maxAge: 60 * 60 * 1000,
-	});
-
-	res.status(200).json({
-		success: true,
-		// roles,
-		accessToken,
-		refreshToken: refreshToken,
-		id: foundUser._id,
-		username: foundUser.name,
-		email: foundUser.email,
-	});
 });
 
-// @desc Refresh
-// @route GET /auth/refresh
-// @access Public - because access token has expired
+// @desc    Delete employee
+// @route   DELETE /api/v1/employees/:id
+// @access  Private (Admin, Manager)
+const deleteEmployee = asyncHandler(async (req, res, next) => {
+	const { user, organizationId } = req;
+	const { id } = req.params;
 
-// const verifyBlacklistToken = asyncHandler(async (req, res, next) => {
-// 	const token = req.cookies.accessToken;
-// 	if (!token) {
-// 		return res.status(403).json({ success: false, data: "Invalid Token" });
+	if (!user.roles.includes("admin") && !user.roles.includes("manager")) {
+		return next(
+			new ErrorResponse("You are not authorized to delete an employee", 403)
+		);
+	}
+
+	if (!mongoose.Types.ObjectId.isValid(id)) {
+		return next(new ErrorResponse(`Invalid employee ID: ${id}`, 400));
+	}
+
+	try {
+		const employee = await User.findOne({
+			_id: id,
+			organizations: organizationId,
+		});
+
+		if (!employee) {
+			return next(
+				new ErrorResponse(`Employee not found with id of ${id}`, 404)
+			);
+		}
+
+		await Organization.updateOne(
+			{ _id: organizationId },
+			{ $pull: { employees: employee._id } }
+		);
+
+		await User.deleteOne({ _id: id });
+
+		logger.info(`Employee deleted: ${id} from organization: ${organizationId}`);
+
+		res.status(200).json({
+			success: true,
+			data: {},
+			message: "Employee deleted successfully!",
+		});
+	} catch (err) {
+		logger.error(`Error deleting employee ${id}: ${err.message}`);
+		return next(new ErrorResponse("Error deleting employee", 500));
+	}
+});
+
+// @desc    Delete employee // for production only
+// @route   DELETE /api/v1/employees/:id
+// @access  Private (Admin, Manager)
+// const deleteEmployee = asyncHandler(async (req, res, next) => {
+// 	const { user, organizationId } = req;
+// 	const { id } = req.params;
+
+// 	if (!user.roles.includes("admin") && !user.roles.includes("manager")) {
+// 		return next(
+// 			new ErrorResponse("You are not authorized to delete an employee", 403)
+// 		);
 // 	}
-// 	let chikitsaDb;
-// 	if (DBConnectionsList["chikitsa"]) {
-// 		chikitsaDb = DBConnectionsList["chikitsa"].useDb("chikitsa");
-// 	} else {
-// 		DBConnectionsList["chikitsa"] = mongoose.createConnection(
-// 			`mongodb+srv://${process.env.MONGO_URL}/` + "chikitsa",
-// 			{ useNewUrlParser: true, useUnifiedTopology: true }
+
+// 	if (!mongoose.Types.ObjectId.isValid(id)) {
+// 		return next(new ErrorResponse(`Invalid employee ID: ${id}`, 400));
+// 	}
+
+// 	const session = await mongoose.startSession();
+// 	try {
+// 		session.startTransaction();
+
+// 		const employee = await User.findOne({
+// 			_id: id,
+// 			organizations: organizationId,
+// 		}).session(session);
+
+// 		if (!employee) {
+// 			await session.abortTransaction();
+// 			session.endSession();
+// 			return next(
+// 				new ErrorResponse(`Employee not found with id of ${id}`, 404)
+// 			);
+// 		}
+
+// 		// Remove employee from the organization's employee list
+// 		await Organization.updateOne(
+// 			{ _id: organizationId },
+// 			{ $pull: { employees: employee._id } },
+// 			{ session }
 // 		);
 
-// 		chikitsaDb = DBConnectionsList["chikitsa"].useDb("chikitsa");
-// 	}
-// 	const TokenBlacklistModel = chikitsaDb.model(
-// 		"TokenBlacklist",
-// 		tokenBlacklistSchema
-// 	);
-// 	const myToken = await TokenBlacklistModel.findOne({ token: token });
-// 	const isLocalhost =
-// 		req.headers.origin.includes("localhost:3000") ||
-// 		req.headers.origin.endsWith(".localhost:3000");
-// 	if (myToken) {
-// 		res.clearcookie("refreshToken", {
-// 			httpOnly: true,
-// 			sameSite: isLocalhost ? "None" : "Strict",
-// 			secure: true,
+// 		await User.deleteOne({ _id: id }, { session });
+
+// 		await session.commitTransaction();
+
+// 		logger.info(`Employee deleted: ${id} from organization: ${organizationId}`);
+
+// 		res.status(200).json({
+// 			success: true,
+// 			data: {},
+// 			message: "Employee deleted successfully!",
 // 		});
-// 		res.clearCookie("accessToken", {
-// 			httpOnly: true,
-// 			sameSite: isLocalhost ? "None" : "Strict",
-// 			secure: true,
-// 		});
-// 		return res.status(403).json({ success: false, data: "Invalid Token" });
+// 	} catch (err) {
+// 		await session.abortTransaction();
+// 		logger.error(`Error deleting employee ${id}: ${err.message}`);
+// 		return next(new ErrorResponse("Error deleting employee", 500));
+// 	} finally {
+// 		session.endSession();
 // 	}
-// 	res.status(200).json({ success: true, data: "Verified" });
 // });
-
-const refresh = (req, res, next) => {
-	const cookies = req.cookies;
-
-	if (!cookies?.jwt) return res.status(401).json({ message: "Unauthorized" });
-
-	const refreshToken = cookies.jwt;
-
-	jwt.verify(
-		refreshToken,
-		process.env.REFRESH_TOKEN_SECRET,
-		{ algorithms: ["HS256"] },
-		asyncHandler(async (err, decoded) => {
-			if (err) return res.status(403).json({ message: "Forbidden" });
-
-			const foundUser = await User.findOne({
-				email: decoded.email,
-			}).exec();
-
-			if (!foundUser) return res.status(401).json({ message: "Unauthorized" });
-
-			const accessToken = jwt.sign(
-				{
-					UserInfo: {
-						username: foundUser.email,
-						roles: foundUser.roles,
-						id: foundUser.id,
-					},
-				},
-				process.env.ACCESS_TOKEN_SECRET,
-				{ algorithm: "HS256", expiresIn: "60m" }
-			);
-
-			const refreshToken = jwt.sign(
-				{ email: foundUser.email, tname: req.params.hospitalId },
-				process.env.REFRESH_TOKEN_SECRET,
-				{ algorithm: "HS256", expiresIn: "1d" }
-			);
-
-			// Saving refreshToken with current user
-			foundUser.refreshToken = refreshToken;
-			const result = await foundUser.save();
-			const config = {
-				headers: {
-					Cookie: `accessToken=${accessToken}`,
-				},
-			};
-
-			res.cookie("accessToken", accessToken, {
-				httpOnly: true, //accessible only by web server
-				secure: true, //https
-				sameSite: "None", //cross-site cookie
-				maxAge: 7 * 24 * 60 * 60 * 1000,
-			});
-
-			// Create secure cookie with refresh token
-			const isLocalhost =
-				req.headers.origin &&
-				(req.headers.origin.includes("localhost:3000") ||
-					req.headers.origin.endsWith(".localhost:3000"));
-			const isSecure =
-				req.secure ||
-				(isLocalhost && req.headers["x-forwarded-proto"] === "https");
-
-			res.cookie("refreshToken", refreshToken, {
-				httpOnly: true,
-				secure: true,
-				sameSite: isLocalhost ? "None" : "Strict",
-				maxAge: 24 * 60 * 60 * 1000,
-			});
-
-			res.cookie("accessToken", accessToken, {
-				httpOnly: true, //accessible only by web server
-				secure: true,
-				sameSite: isLocalhost ? "None" : "Strict",
-				maxAge: 60 * 60 * 1000,
-			});
-
-			res.status(200).json({
-				success: true,
-				// roles,
-				accessToken,
-				refreshToken: refreshToken,
-				id: foundUser._id,
-				username: foundUser.name,
-				email: foundUser.email,
-			});
-		})
-	);
-};
 
 module.exports = {
 	createEmployee,
-	loginEmployee,
-	verifyEmployee,
-	refresh,
+	getEmployees,
+	getEmployeeById,
+	updateEmployee,
+	deleteEmployee,
 };

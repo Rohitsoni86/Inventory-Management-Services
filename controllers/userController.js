@@ -1,7 +1,7 @@
 const asyncHandler = require("express-async-handler");
 const bcryptjs = require("bcryptjs");
 const ErrorResponse = require("../utils/errorResponse");
-const OrganizationAdminModel = require("../models/organizationAdminModel");
+// const OrganizationAdminModel = require("../models/organizationAdminModel");
 const Organization = require("../models/organizationModel");
 const moment = require("moment");
 const crypto = require("crypto");
@@ -13,457 +13,312 @@ dotenv.config({ path: "../config/config.env" });
 const CryptoJS = require("crypto-js");
 const jwt = require("jsonwebtoken");
 const logger = require("../middlewares/custom-logger");
-const User = require("../models/userModel");
-const { default: registerSchema } = require("../schemas/registerSchema");
+const { UserModel: User } = require("../models/userModel");
+const Joi = require("joi");
 
-const createNewUser = asyncHandler(async (req, res, next) => {
-	// validate with joi
-	const { error } = registerSchema.validate(req.body);
-	if (error) return next(new ErrorResponse(error.details[0].message, 400));
+const userCreationValidationSchema = Joi.object({
+	firstName: Joi.string().min(2).max(50).required(),
+	lastName: Joi.string().min(2).max(50).required(),
+	email: Joi.string().email().required(),
+	phone: Joi.string()
+		.pattern(/^\d{10,15}$/)
+		.required(),
+	address: Joi.string().required(),
+	city: Joi.string().required(),
+	state: Joi.string().required(),
+	country: Joi.string().required(),
+	postalCode: Joi.string().required(),
+	flagCode: Joi.string().optional(),
+	roles: Joi.array().items(Joi.string().valid("admin", "manager", "employee")),
+	honorific: Joi.string().optional(),
+	middleName: Joi.string().min(2).max(50).optional(),
+	countryCode: Joi.string()
+		.pattern(/^\+?[1-9]\d{1,14}$/)
+		.optional(),
+	gender: Joi.string().optional(),
+	password: Joi.string().optional(),
+});
+
+async function generateUserCode(organizationId, roles = []) {
+	const isEmployee = roles.includes("employee");
+	const codeField = isEmployee ? "employeeCode" : "userCode";
+	const prefix = isEmployee ? "EMPL" : "USER";
+
+	const lastUser = await User.findOne(
+		{ organizations: organizationId, [codeField]: { $exists: true } },
+		{ [codeField]: 1 }
+	)
+		.sort({ createdAt: -1 })
+		.lean();
+
+	let lastCode = lastUser ? lastUser[codeField] : "";
+
+	if (!lastCode) {
+		return `${prefix}-0001`;
+	}
+
+	const match = lastCode.match(/(\d+)$/);
+	if (!match) return `${prefix}-0001`;
+
+	const nextNum = String(parseInt(match[1], 10) + 1).padStart(4, "0");
+	return `${prefix}-${nextNum}`;
+}
+
+const createNewOrganizationUser = asyncHandler(async (req, res, next) => {
+	const organizationId = req.organizationId;
+	const creator = req.user;
+
+	if (!creator?.roles?.includes("admin")) {
+		return next(
+			new ErrorResponse(
+				"You are not authorized to create a new user in this organization.",
+				403
+			)
+		);
+	}
+
+	req.body.honorific = req.body.honorific || "Miss";
+
+	const { error } = userCreationValidationSchema.validate(req.body);
+	if (error) {
+		return next(
+			new ErrorResponse(`Validation Error: ${error.details[0].message}`, 400)
+		);
+	}
 
 	const {
-		legalName,
-		registrationNumber,
+		firstName,
+		lastName,
 		email,
-		countryCode,
-		phone,
-		address,
-		city,
-		state,
-		country,
-		postalCode,
-		companySize,
-		flagCode,
-		user,
-		roles,
-		active,
+		roles = ["employee"],
+		...otherDetails
 	} = req.body;
 
-	// check for exsisting user
-	const existingUser = await User.findOne({ email: user.email });
-	if (existingUser)
-		return next(new ErrorResponse("User with this email already exists", 400));
+	const permittedRoles = ["admin", "manager", "employee"];
+	const isRoleCreationAllowed = roles.every((role) =>
+		permittedRoles.includes(role)
+	);
 
-	const session = await mongoose.startSession();
-	session.startTransaction();
+	if (!isRoleCreationAllowed) {
+		return next(
+			new ErrorResponse(
+				`You can only create users with roles: ${permittedRoles.join(", ")}.`,
+				400
+			)
+		);
+	}
 
+	const userExists = await User.findOne({
+		email,
+		organizations: organizationId,
+	});
+
+	if (userExists) {
+		return next(
+			new ErrorResponse(
+				"A user with this email already exists in this organization.",
+				409
+			)
+		);
+	}
+
+	const userCode = await generateUserCode(organizationId, roles);
+	const codeField = roles.includes("employee") ? "employeeCode" : "userCode";
+
+	let { password } = req.body;
+	if (!password) {
+		const safeFirstName =
+			(firstName || "").toLowerCase().split(" ")[0] || "user";
+		password = `${safeFirstName}@${userCode}`;
+	}
+	const hashedPwd = await bcryptjs.hash(password, 10);
+
+	let userDoc;
 	try {
-		const hashedPwd = await bcryptjs.hash(user.password, 10);
-		const [userDoc] = await User.create(
-			[
-				{
-					...user,
-					password: hashedPwd,
-					roles: ["admin"],
-					active: true,
-				},
-			],
-			{ session }
-		);
-
-		const [orgDoc] = await Organization.create(
-			[
-				{
-					legalName,
-					registrationNumber,
-					email,
-					countryCode,
-					phone,
-					address,
-					city,
-					state,
-					country,
-					postalCode,
-					companySize,
-					flagCode,
-					createdBy: userDoc._id,
-					admins: [userDoc._id],
-					active,
-				},
-			],
-			{ session }
-		);
-
-		userDoc.organizations.push(orgDoc._id);
-		await userDoc.save({ session });
-
-		await session.commitTransaction();
-
-		logger.info(`New organization created: ${orgDoc.legalName}`);
-
-		res.status(201).json({
-			success: true,
-			data: { user: userDoc, organization: orgDoc },
-			message: "Registration Successful!",
+		userDoc = await User.create({
+			...otherDetails,
+			[codeField]: userCode,
+			firstName,
+			lastName,
+			email,
+			roles,
+			password: hashedPwd,
+			organizations: [organizationId],
 		});
 	} catch (err) {
-		await session.abortTransaction();
-		logger.error(`Registration failed: ${err.message}`);
-		return next(
-			new ErrorResponse(err.message || "Error processing request", 500)
-		);
-	} finally {
-		session.endSession();
-	}
-});
-
-const loginAdmin = asyncHandler(async (req, res, next) => {
-	console.log("login called");
-	const { email, password } = req.body;
-	const encryptionKey = "rohit-soni-86";
-	// const decryptedBytes = CryptoJS.AES.decrypt(credentials, encryptionKey);
-	// const decryptedData = decryptedBytes.toString(CryptoJS.enc.Utf8);
-	// const { email, password } = JSON.parse(decryptedData);
-	// Now `decryptedData` contains the original data
-	// const tenantDbName = req.params.hospitalId;
-	// const { tenantDb } = req;
-
-	if (!email || !password) {
-		return res.status(400).json({ message: "All fields are required" });
+		logger.error(`Error creating user: ${err.message}`);
+		return next(new ErrorResponse("Error creating user", 500));
 	}
 
-	try {
-		const foundUser = await OrganizationAdminModel.findOne({
-			adminEmail: email,
-		}).select("+password");
-		// .populate({
-		// 	path: "organizations",
-		// 	select: "legalName email phone address city state country", // Fields to include in the populated data
-		// }); // Populate the organizations;
-		console.log("Found Admin", foundUser);
-
-		const organizationsDetails = await Organization.findOne(
-			foundUser.organizations[0]
-		);
-
-		if (!foundUser || !foundUser.active) {
-			return next(new ErrorResponse("Invalid credentials", 401));
+	const organization = await Organization.findById(organizationId);
+	if (!organization) {
+		try {
+			await User.findByIdAndDelete(userDoc._id);
+		} catch (cleanupErr) {
+			logger.error(
+				`Failed to rollback created user ${userDoc._id}: ${cleanupErr.message}`
+			);
 		}
 
-		// console.log(foundUser);
-		const match = await bcryptjs.compare(password, foundUser.adminPassword);
-
-		if (!match) return res.status(401).json({ message: "Unauthorized User" });
-		const roles = foundUser.roles;
-
-		const accessToken = jwt.sign(
-			{
-				UserInfo: {
-					username: foundUser.adminEmail,
-					roles: foundUser.roles,
-					id: foundUser.id,
-				},
-			},
-			process.env.ACCESS_TOKEN_SECRET,
-			{ algorithm: "HS256", expiresIn: "60m" }
-		);
-
-		const refreshToken = jwt.sign(
-			{ email: foundUser.email },
-			process.env.REFRESH_TOKEN_SECRET,
-			{ algorithm: "HS256", expiresIn: "1d" }
-		);
-
-		// Saving refreshToken with current user
-		// foundUser.refreshToken = refreshToken;
-		// const result = await foundUser.save();
-
-		// Create secure cookie with refresh token
-		const isLocalhost =
-			req.headers.origin &&
-			(req.headers.origin.includes("localhost:3000") ||
-				req.headers.origin.endsWith(".localhost:3000"));
-		const isSecure =
-			req.secure ||
-			(isLocalhost && req.headers["x-forwarded-proto"] === "https");
-
-		res.cookie("refreshToken", refreshToken, {
-			httpOnly: true,
-			secure: true,
-			sameSite: isLocalhost ? "None" : "Strict",
-			maxAge: 24 * 60 * 60 * 1000,
-		});
-
-		res.cookie("accessToken", accessToken, {
-			httpOnly: true, //accessible only by web server
-			secure: true,
-			sameSite: isLocalhost ? "None" : "Strict",
-			maxAge: 60 * 60 * 1000,
-		});
-		res.json({
-			roles,
-			accessToken,
-			username: `${foundUser.adminFirstName + foundUser.adminLastName}`,
-			email: foundUser.adminEmail,
-			organizationDetails: { ...organizationsDetails },
-		});
-	} catch (error) {
-		console.log("Login Admin Error", error);
-		return next(new ErrorResponse("Invalid credentials", 401));
+		return next(new ErrorResponse("Organization not found", 404));
 	}
+
+	if (roles.includes("employee") || roles.includes("manager")) {
+		if (!organization.employees.includes(userDoc._id)) {
+			organization.employees.push(userDoc._id);
+		}
+	}
+
+	if (roles.includes("admin")) {
+		if (!organization.admins.includes(userDoc._id)) {
+			organization.admins.push(userDoc._id);
+		}
+	}
+
+	await organization.save();
+
+	logger.info(
+		`User ${userDoc._id} created in organization ${organizationId} by ${creator}`
+	);
+
+	res.status(201).json({
+		success: true,
+		data: userDoc,
+		message: `User with role(s) '${roles.join(", ")}' created successfully!`,
+	});
 });
 
-// @desc Login
-// @route POST /auth
-// @access Public
-// const loginWithMFA = asyncHandler(async (req, res, next) => {
-// 	const { email, password } = req.body;
+// for production use
+// const createNewOrganizationUser = asyncHandler(async (req, res, next) => {
+// 	const organizationId = req.organizationId;
+// 	const creator = req.user;
 
-// 	if (!email || !password) {
-// 		return res.status(400).json({ message: "All fields are required" });
-// 	}
-
-// 	try {
-// 		const foundUser = await User.findOne({ email }).select("+password");
-
-// 		if (!foundUser || !foundUser.active) {
-// 			return next(new ErrorResponse("Invalid credentials", 401));
-// 		}
-
-// 		console.log(foundUser);
-// 		const match = await bcryptjs.compare(password, foundUser.password);
-
-// 		if (!match) return res.status(401).json({ message: "Unauthorized" });
-// 		const temporarytoken = jwt.sign(
-// 			{
-// 				email: foundUser.email,
-// 				roles: foundUser.roles,
-// 			},
-// 			process.env.ACCESS_TOKEN_SECRET,
-// 			{ algorithm: "HS256", expiresIn: "5m" }
+// 	if (!creator.roles.includes("admin")) {
+// 		return next(
+// 			new ErrorResponse(
+// 				"You are not authorized to create a new user in this organization.",
+// 				403
+// 			)
 // 		);
-// 		res.cookie("temporarytoken", temporarytoken, {
-// 			httpOnly: true, //accessible only by web server
-// 			secure: true, //https
-// 			sameSite: "None", //cross-site cookie
-// 			maxAge: 5 * 60 * 1000,
-// 		});
-// 		if (foundUser.mfaEnabled && foundUser.mfaSecret) {
-// 			return res.status(200).json({
-// 				success: true,
-// 				data: { mfaEnabled: foundUser.mfaEnabled, secret: foundUser.mfaSecret },
-// 			});
-// 		} else {
-// 			const secret = speakeasy.generateSecret({ length: 20 });
-
-// 			const customURL = `otpauth://totp/${encodeURIComponent(
-// 				"Chikitsa"
-// 			)}:${encodeURIComponent(foundUser.name)}?secret=${
-// 				secret.base32
-// 			}&issuer=${encodeURIComponent("Chikitsa")}`;
-// 			qrcode.toDataURL(customURL, (err, data_url) => {
-// 				return res.status(200).json({
-// 					success: true,
-// 					data: {
-// 						mfaEnabled: foundUser.mfaEnabled,
-// 						secret: secret.base32,
-// 						qrcode: data_url,
-// 					},
-// 				});
-// 			});
-// 		}
-// 	} catch (err) {
-// 		return next(new ErrorResponse("Invalid credentials", 401));
 // 	}
-// });
 
-// this is for admin
-// const verifyMFA = asyncHandler(async (req, res, next) => {
-// 	const { code, secret } = req.body;
-// 	try {
-// 		const user = req.user;
-// 		const foundUser = await User.findOne({ email: user.email });
-// 		if (foundUser.mfaEnabled && foundUser.mfaSecret !== secret) {
-// 			return res.status(400).json({ success: false, data: "Invalid Secret" });
-// 		}
-// 		const isValid = speakeasy.totp.verify({
-// 			secret,
-// 			encoding: "base32",
-// 			token: code,
-// 		});
+// 	let body = req.body;
 
-// 		if (isValid) {
-// 			const roles = foundUser.roles;
-// 			console.log(roles);
+// 	body.honorific = "Miss";
 
-// 			const accessToken = jwt.sign(
-// 				{
-// 					UserInfo: {
-// 						username: foundUser.email,
-// 						roles: foundUser.roles,
-// 						id: foundUser.id,
-// 					},
-// 				},
-// 				process.env.ACCESS_TOKEN_SECRET,
-// 				{ algorithm: "HS256", expiresIn: "60m" }
-// 			);
-
-// 			const refreshToken = jwt.sign(
-// 				{ email: foundUser.email },
-// 				process.env.REFRESH_TOKEN_SECRET,
-// 				{ algorithm: "HS256", expiresIn: "1d" }
-// 			);
-// 			// Saving refreshToken with current user
-// 			foundUser.refreshToken = refreshToken;
-// 			foundUser.mfaSecret = secret;
-// 			foundUser.mfaEnabled = true;
-// 			const result = await foundUser.save();
-// 			res.clearCookie("temporarytoken", {
-// 				httpOnly: true,
-// 				sameSite: "None",
-// 				secure: true,
-// 			});
-// 			// Create secure cookie with refresh token
-// 			res.cookie("refreshToken", refreshToken, {
-// 				httpOnly: true, //accessible only by web server
-// 				secure: true, //https
-// 				sameSite: "None", //cross-site cookie
-// 				maxAge: 7 * 24 * 60 * 60 * 1000, //cookie expiry: set to match rT
-// 			});
-
-// 			res.cookie("accessToken", accessToken, {
-// 				httpOnly: true, //accessible only by web server
-// 				secure: true, //https
-// 				sameSite: "None", //cross-site cookie
-// 				maxAge: 60 * 60 * 1000,
-// 			});
-
-// 			// Send accessToken containing username and roles
-// 			// Send authorization roles and access token to user
-// 			logger.info({ roles, accessToken, username: foundUser.name });
-// 			res.status(200).json({
-// 				success: true,
-// 				data: { name: foundUser.name, userId: foundUser._id },
-// 			});
-// 		} else {
-// 			res.status(400).json({ success: false, message: "Invalid code" });
-// 		}
-// 	} catch (error) {
-// 		console.log(error);
-// 		res.status(500).json({ success: false, data: "Something went wrong" });
+// 	const { error } = userCreationValidationSchema.validate(req.body);
+// 	if (error) {
+// 		return next(
+// 			new ErrorResponse(`Validation Error: ${error.details[0].message}`, 400)
+// 		);
 // 	}
-// });
 
-// @desc Refresh
-// @route GET /auth/refresh
-// @access Public - because access token has expired
-// const refresh = (req, res, next) => {
-// 	const { tenantDb } = req;
-// 	// console.log(tenantDb);
-// 	const cookies = req.cookies;
+// 	const {
+// 		firstName,
+// 		lastName,
+// 		email,
+// 		roles = ["employee"],
+// 		...otherDetails
+// 	} = req.body;
 
-// 	console.log("hello world");
-// 	if (!cookies?.jwt) return res.status(401).json({ message: "Unauthorized" });
-
-// 	const refreshToken = cookies.jwt;
-// 	// console.log(refreshToken);
-
-// 	jwt.verify(
-// 		refreshToken,
-// 		process.env.REFRESH_TOKEN_SECRET,
-// 		{ algorithms: ["HS256"] },
-// 		asyncHandler(async (err, decoded) => {
-// 			console.log(err, "refresh error");
-// 			if (err) return res.status(403).json({ message: "Forbidden" });
-
-// 			let TenantUserModel = tenantDb.model("TenantUser", tenantUserSchema);
-// 			console.log(decoded.email);
-// 			const foundUser = await TenantUserModel.findOne({
-// 				email: decoded.email,
-// 			}).exec();
-// 			console.log(foundUser);
-// 			if (!foundUser) return res.status(401).json({ message: "Unauthorized" });
-// 			const accessToken = jwt.sign(
-// 				{
-// 					UserInfo: {
-// 						username: foundUser.email,
-// 						roles: foundUser.roles,
-// 						id: foundUser.id,
-// 						tname: decoded.tname,
-// 					},
-// 				},
-// 				process.env.ACCESS_TOKEN_SECRET,
-// 				{ expiresIn: "50m" }
-// 			);
-
-// 			const isLocalhost =
-// 				req.headers.origin.includes("localhost:3000") ||
-// 				req.headers.origin.endsWith(".localhost:3000");
-
-// 			res.cookie("refreshToken", refreshToken, {
-// 				httpOnly: true,
-// 				secure: true,
-// 				sameSite: isLocalhost ? "None" : "Strict",
-// 				maxAge: 24 * 60 * 60 * 1000,
-// 			});
-
-// 			res.cookie("accessToken", accessToken, {
-// 				httpOnly: true, //accessible only by web server
-// 				secure: true,
-// 				sameSite: isLocalhost ? "None" : "Strict",
-// 				maxAge: 5 * 60 * 1000,
-// 			});
-
-// 			res.json({ accessToken });
-// 		})
+// 	const permittedRoles = ["admin", "manager", "employee"];
+// 	const isRoleCreationAllowed = roles.every((role) =>
+// 		permittedRoles.includes(role)
 // 	);
-// };
 
-// const verifyAuth = asyncHandler(async (req, res, next) => {
-// 	const { id, tname } = req.user;
-// 	const token = req.cookies.accessToken;
-// 	if (!token) {
-// 		return res.status(403).json({ success: false, data: "Invalid Token" });
+// 	if (!isRoleCreationAllowed) {
+// 		return next(
+// 			new ErrorResponse(
+// 				`You can only create users with roles: ${permittedRoles.join(", ")}.`,
+// 				400
+// 			)
+// 		);
 // 	}
-// 	const { tenantDb, dbName } = req;
-// 	if (req.user.roles.includes("integrator")) {
-// 		return res.status(200).json({
-// 			data: "success",
-// 			id,
-// 			roles: req.user.roles,
-// 			username: req.user.username,
-// 			tenantDbId: dbName,
+
+// 	const session = await mongoose.startSession();
+// 	try {
+// 		session.startTransaction();
+
+// 		const userExists = await User.findOne({
+// 			email,
+// 			organizations: organizationId,
+// 		}).session(session);
+
+// 		if (userExists) {
+// 			await session.abortTransaction();
+// 			session.endSession();
+// 			return next(
+// 				new ErrorResponse(
+// 					"A user with this email already exists in this organization.",
+// 					409
+// 				)
+// 			);
+// 		}
+
+// 		const userCode = await generateUserCode(organizationId, roles);
+// 		const codeField = roles.includes("employee") ? "employeeCode" : "userCode";
+
+// 		let { password } = req.body;
+// 		if (!password) {
+// 			password = `${firstName.toLowerCase().split(" ")[0]}@${userCode}`;
+// 		}
+// 		const hashedPwd = await bcryptjs.hash(password, 10);
+
+// 		const [userDoc] = await User.create(
+// 			[
+// 				{
+// 					...otherDetails,
+// 					[codeField]: userCode,
+// 					firstName,
+// 					lastName,
+// 					email,
+// 					roles,
+// 					password: hashedPwd,
+// 					organizations: [organizationId],
+// 				},
+// 			],
+// 			{ session }
+// 		);
+
+// 		const organization = await Organization.findById(organizationId).session(
+// 			session
+// 		);
+// 		if (!organization) {
+// 			await session.abortTransaction();
+// 			session.endSession();
+// 			return next(new ErrorResponse("Organization not found", 404));
+// 		}
+
+// 		if (roles.includes("employee") || roles.includes("manager")) {
+// 			organization.employees.push(userDoc._id);
+// 		}
+
+// 		if (roles.includes("admin")) {
+// 			organization.admins.push(userDoc._id);
+// 		}
+
+// 		await organization.save({ session });
+
+// 		await session.commitTransaction();
+
+// 		logger.info(
+// 			`User ${userDoc._id} created in organization ${organizationId} by ${creator._id}`
+// 		);
+
+// 		res.status(201).json({
+// 			success: true,
+// 			data: userDoc,
+// 			message: `User with role(s) '${roles.join(", ")}' created successfully!`,
 // 		});
-// 	}
-// 	console.log("dbName");
-// 	console.log(dbName);
-// 	const TenantUserModel = tenantDb.model("TenantUser", tenantUserSchema);
-// 	const user = await TenantUserModel.findById(id);
-// 	if (user.active == false) {
-// 		return res.status(401).json({ message: "USER BANNED" });
-// 	}
-// 	if (!user) {
-// 		return res.status(403).json({ error: "You must be logged In." });
-// 	}
-// 	res.status(200).json({
-// 		data: "success",
-// 		id,
-// 		roles: req.user.roles,
-// 		username: user.name,
-// 		email: user.email,
-// 		tenantDbId: dbName,
-// 		allowedAccess: user.allowedAccess,
-// 		reorder: user.reorders,
-// 	});
-// });
-
-// const verifyMFA = asyncHandler(async (req, res, next) => {
-// 	const { code, secret } = req.body;
-
-// 	const isValid = speakeasy.totp.verify({
-// 		secret,
-// 		encoding: "base32",
-// 		token: code,
-// 	});
-
-// 	if (isValid) {
-// 		res.json({ success: true, message: "MFA enabled successfully" });
-// 	} else {
-// 		res.json({ success: false, message: "Invalid code" });
+// 	} catch (err) {
+// 		await session.abortTransaction();
+// 		logger.error(`Error creating user: ${err.message}`);
+// 		return next(new ErrorResponse("Error processing the request", 500));
+// 	} finally {
+// 		session.endSession();
 // 	}
 // });
 
 module.exports = {
-	createNewUser,
-	loginAdmin,
+	createNewOrganizationUser,
 };

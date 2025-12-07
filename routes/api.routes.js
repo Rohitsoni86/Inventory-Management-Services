@@ -12,8 +12,8 @@ router.use(
 	verifyOrganizationJWT,
 	require("./api.admin.routes")
 );
-router.use("/admin", require("./api.superAdmin.routes"));
-router.use("/organization/employee", require("./api.employee.routes"));
+// router.use("/admin", require("./api.superAdmin.routes"));
+router.use("/organization/employees", require("./api.employee.routes"));
 
 // POS
 router.use(verifyOrganizationJWT);

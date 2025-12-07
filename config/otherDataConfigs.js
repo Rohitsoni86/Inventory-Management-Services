@@ -3,6 +3,7 @@ const ROLES_LIST = {
 	Admin: "admin",
 	Customer: "customer",
 	Employee: "employee",
+	Manager: "manager",
 };
 
 const GENDER = {

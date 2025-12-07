@@ -4,6 +4,17 @@ const { ROLES_LIST, GENDER } = require("../config/otherDataConfigs");
 
 const UserSchema = new mongoose.Schema(
 	{
+		employeeCode: {
+			type: String,
+			trim: true,
+		},
+		userCode: {
+			type: String,
+			trim: true,
+		},
+		honorific: {
+			type: String,
+		},
 		firstName: {
 			type: String,
 			required: true,
@@ -15,15 +26,19 @@ const UserSchema = new mongoose.Schema(
 			type: String,
 			required: false,
 			trim: true,
-			minlength: 2,
+			minlength: 0,
 			maxlength: 50,
 		},
 		lastName: {
 			type: String,
 			required: true,
 			trim: true,
-			minlength: 2,
+			minlength: 0,
 			maxlength: 50,
+		},
+		gender: {
+			type: String,
+			enum: Object.values(GENDER),
 		},
 		email: {
 			type: String,
@@ -92,15 +107,75 @@ const UserSchema = new mongoose.Schema(
 			required: true,
 			enum: Object.values(ROLES_LIST),
 		},
+		address: {
+			type: String,
+			trim: true,
+			minlength: [5, "Address must be at least 5 characters long."],
+			maxlength: [200, "Address cannot exceed 200 characters."],
+		},
+		city: {
+			type: String,
+			// required: [true, "City is required."],
+			trim: true,
+			minlength: [2, "City must be at least 2 characters long."],
+			maxlength: [20, "City cannot exceed 20 characters."],
+		},
+		state: {
+			type: String,
+			// required: [true, "State is required."],
+			trim: true,
+			minlength: [2, "State must be at least 2 characters long."],
+			maxlength: [20, "State cannot exceed 20 characters."],
+		},
+		country: {
+			type: String,
+			// required: [true, "Country is required."],
+			trim: true,
+			minlength: [2, "Country must be at least 2 characters long."],
+			maxlength: [20, "Country cannot exceed 20 characters."],
+		},
+		postalCode: {
+			type: String,
+			// required: [true, "Postal code is required."],
+			trim: true,
+			minlength: [6, "Postal code must be at least 6 characters long."],
+			maxlength: [10, "Postal code cannot exceed 10 characters."],
+		},
+		currentLocation: {
+			type: String,
+		},
 		organizations: [
 			{ type: mongoose.Schema.Types.ObjectId, ref: "Organization" },
 		],
+		refreshToken: {
+			type: String,
+		},
 	},
 	{
-		timestamps: true, // If you want automatic timestamps for createdAt and updatedAt
+		timestamps: true,
 	}
 );
 
-const User = mongoose.model("User", UserSchema);
+UserSchema.index(
+	{ employeeCode: 1 },
+	{
+		unique: true,
+		partialFilterExpression: { employeeCode: { $exists: true, $ne: null } },
+	}
+);
 
-module.exports = User;
+// 🔹 Unique when present
+UserSchema.index(
+	{ userCode: 1 },
+	{
+		unique: true,
+		partialFilterExpression: { userCode: { $exists: true, $ne: null } },
+	}
+);
+
+const UserModel = mongoose.model("User", UserSchema);
+
+module.exports = {
+	UserSchema,
+	UserModel,
+};

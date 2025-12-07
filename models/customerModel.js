@@ -1,5 +1,4 @@
-"use strict";
-var mongoose = require("mongoose");
+const mongoose = require("mongoose");
 const { ROLES_LIST, GENDER } = require("../config/otherDataConfigs");
 
 const CustomerSchema = new mongoose.Schema(
@@ -20,13 +19,13 @@ const CustomerSchema = new mongoose.Schema(
 			lowercase: true,
 			trim: true,
 		},
-		// honorific: {
-		// 	type: String,
-		// },
-		// gender: {
-		// 	type: String,
-		// 	enum: Object.values(GENDER),
-		// },
+		honorific: {
+			type: String,
+		},
+		gender: {
+			type: String,
+			enum: Object.values(GENDER),
+		},
 		phoneNo: {
 			type: String,
 			required: [true, "phone no required."],
@@ -42,7 +41,7 @@ const CustomerSchema = new mongoose.Schema(
 		organizations: [
 			{
 				type: mongoose.Schema.Types.ObjectId,
-				ref: "organizations",
+				ref: "Organizations",
 			},
 		],
 		refreshToken: String,

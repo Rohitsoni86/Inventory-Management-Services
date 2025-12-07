@@ -1,20 +1,39 @@
 const express = require("express");
 const {
 	createEmployee,
-	loginEmployee,
-	verifyEmployee,
-	refresh,
+	getEmployees,
+	getEmployeeById,
+	updateEmployee,
+	deleteEmployee,
 } = require("../controllers/employeeController");
-const { verifyJWT } = require("../middlewares/verifyJWT");
-const employeeRouter = express.Router();
+const { verifyOrganizationJWT } = require("../middlewares/verifyJWT");
+const advanceResults = require("../middlewares/advanceResult");
+const { UserSchema } = require("../models/userModel");
+const router = express.Router();
 
-employeeRouter.post("/login", loginEmployee);
-// Verify Super Admin
-employeeRouter.post("/verify", verifyEmployee);
+router.use(verifyOrganizationJWT);
+// ?roles[in]=employee&roles[in]=manager
+router.get(
+	"/list",
+	advanceResults(UserSchema, "User", {
+		searchFields: [
+			"firstName",
+			"lastName",
+			"email",
+			"employeeCode",
+			"userCode",
+			"role",
+		],
+		selectableFields:
+			"firstName lastName email role status phone city state createdAt employeeCode userCode roles",
+	}),
+	getEmployees
+);
 
-// employeeRouter.get("/refresh", refresh);
-// employeeRouter.use(verifyOrganizationJWT);
+router
+	.route("/:id")
+	.get(getEmployeeById)
+	.put(updateEmployee)
+	.delete(deleteEmployee);
 
-// Organization Actions Definitions
-
-module.exports = employeeRouter;
+module.exports = router;

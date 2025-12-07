@@ -77,8 +77,12 @@ const {
 	updateProduct,
 	deleteProduct,
 } = require("../controllers/productController");
+const { createNewOrganizationUser } = require("../controllers/userController");
 
 const adminRouter = express.Router();
+
+// Handle users creation
+adminRouter.post("/create/user", createNewOrganizationUser);
 
 // Category Routes
 adminRouter.post("/create/category", createCategory);
