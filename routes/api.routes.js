@@ -17,6 +17,7 @@ router.use("/organization/employees", require("./api.employee.routes"));
 
 // POS
 router.use(verifyOrganizationJWT);
+router.use("/organization/customers", require("./api.customers.routes"));
 router.use("/organization/products", require("./api.product.routes"));
 router.use("/organization/pos", require("./api.sales.routes"));
 router.use("/organization/inventory", require("./api.inventory.routes"));

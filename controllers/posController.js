@@ -20,6 +20,7 @@ const { MeasuringUnit } = require("../models/measuringUnitsModel");
 const { createSaleSchema } = require("../validators/salesCreationValidator");
 const { CustomerModel } = require("../models/customerModel");
 const { convertToBaseUnit } = require("../utils/unitConversion");
+const Organization = require("../models/organizationModel");
 
 /**
  * Helper to auto-generate invoice number (super simple, you can replace with fancy logic)
@@ -270,31 +271,58 @@ const createSale = asyncHandler(async (req, res, next) => {
 		if (customerData) {
 			if (typeof customerData === "string") {
 				// It's an ID
-				customerDoc = await CustomerModel.findById(customerData); // Removed .session(session)
+				customerDoc = await CustomerModel.findById(customerData);
 			} else if (typeof customerData === "object") {
 				// It's an object with details, find or create
-				const { name, phoneNo, email } = customerData;
+				const {
+					honorific,
+					gender,
+					name,
+					countryCode,
+					flagCode,
+					phoneNo,
+					email,
+					address,
+					city,
+					state,
+					country,
+					postalCode,
+				} = customerData;
 
 				// Try to find by phone number & name
 				customerDoc = await CustomerModel.findOne({
 					name,
 					phoneNo,
 					organizations: organizationId,
-				}); // Removed .session(session)
+				});
 
 				if (!customerDoc) {
 					// Not found, so create a new one
 					const customerCode = await generateCustomerCode(organizationId);
 
-					// Changed from create([arr], {session}) to create(obj)
 					customerDoc = await CustomerModel.create({
 						name,
+						honorific,
+						gender,
+						countryCode,
+						flagCode,
 						phoneNo,
+						address,
+						city,
+						state,
+						country,
+						postalCode,
 						email: email || "",
 						customerCode,
 						organizations: [organizationId],
 						createdBy: userId,
 					});
+
+					// also add in the organization model new customer
+					const organization = await Organization.findById(organizationId);
+
+					organization.customers.push(customerDoc._id);
+					await organization.save();
 				}
 			}
 		}
@@ -616,6 +644,7 @@ const createSale = asyncHandler(async (req, res, next) => {
 			invoiceNumber,
 			invoiceDate: now,
 			customerName,
+			customerCode,
 			notes,
 			lines: salesLines,
 			totalGross,
@@ -629,16 +658,11 @@ const createSale = asyncHandler(async (req, res, next) => {
 
 		console.log("✅ Created Sales Doc ==>", saleDoc);
 
-		// REMOVED: await session.commitTransaction();
-		// REMOVED: session.endSession();
-
 		res.status(201).json({
 			success: true,
-			data: saleDoc, // Changed from saleDoc[0] because we are not using array create anymore
+			data: saleDoc,
 		});
 	} catch (err) {
-		// REMOVED: await session.abortTransaction();
-		// REMOVED: session.endSession();
 		console.error("Error in createSale:", err);
 		return next(
 			err instanceof ErrorResponse
