@@ -49,6 +49,17 @@ const createSaleSchema = Joi.object({
 				phoneNo: Joi.string().required(),
 				email: Joi.string().email().optional().allow(""),
 				address: Joi.string().optional().allow(""),
+				city: Joi.string().optional().allow(""),
+				state: Joi.string().optional().allow(""),
+				country: Joi.string().optional().allow(""),
+				postalCode: Joi.string().optional().allow(""),
+				honorific: Joi.string().optional().allow(""),
+				gender: Joi.string().optional().allow(""),
+				countryCode: Joi.string().optional().allow(""),
+				flagCode: Joi.string().optional().allow(""),
+				// customerCode: Joi.string().optional().allow(""),
+				// organizations: Joi.array().items(objectIdSchema).optional(),
+				// createdBy: Joi.string().optional().allow(""),
 			})
 		)
 		.optional(),

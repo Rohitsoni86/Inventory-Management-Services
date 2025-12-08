@@ -1,5 +1,8 @@
 const express = require("express");
-const { getCustomers } = require("../controllers/customerController");
+const {
+	getCustomers,
+	createCustomer,
+} = require("../controllers/customerController");
 const advanceResults = require("../middlewares/advanceResult");
 const { CustomerSchema } = require("../models/customerModel");
 const customerRouter = express.Router();
@@ -9,8 +12,11 @@ customerRouter.get(
 	advanceResults(CustomerSchema, "Customer", {
 		searchFields: ["name", "email", "customerCode", "phoneNo"],
 		selectableFields:
-			"name email customerCode phoneNo postalCode active city state createdAt address",
+			"honorific name email customerCode phoneNo postalCode active city state createdAt address gender",
 	}),
 	getCustomers
 );
+
+customerRouter.post("/create", createCustomer);
+
 module.exports = customerRouter;
