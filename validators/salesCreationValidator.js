@@ -63,6 +63,14 @@ const createSaleSchema = Joi.object({
 			})
 		)
 		.optional(),
+
+	payment: Joi.object({
+		mode: Joi.string().optional().allow(""),
+		paidAmount: Joi.number().min(0).optional(),
+		transactionId: Joi.string().allow("").optional(),
+		paymentDate: Joi.date().allow("").optional(),
+	}).optional(),
+
 	notes: Joi.string().allow("").optional(),
 	lines: Joi.array().items(saleLineSchema).min(1).required(),
 	subtotal: Joi.number().min(0).optional(),

@@ -22,9 +22,6 @@ const { CustomerModel } = require("../models/customerModel");
 const { convertToBaseUnit } = require("../utils/unitConversion");
 const Organization = require("../models/organizationModel");
 
-/**
- * Helper to auto-generate invoice number (super simple, you can replace with fancy logic)
- */
 async function generateInvoiceNumber(organizationId) {
 	const lastInvoice = await SalesInvoiceModel.findOne({ organizationId })
 		.sort({ createdAt: -1 })
@@ -42,9 +39,6 @@ async function generateInvoiceNumber(organizationId) {
 	return lastInvoice.invoiceNumber.replace(/(\d+)$/, nextNum);
 }
 
-/**
- * Helper to generate a new customer code.
- */
 async function generateCustomerCode(organizationId) {
 	const lastCustomer = await CustomerModel.findOne({
 		organizations: organizationId,
@@ -246,7 +240,8 @@ const createSale = asyncHandler(async (req, res, next) => {
 		return next(new ErrorResponse(error.details[0].message, 400));
 	}
 
-	const { invoiceDate, customer: customerData, notes } = value;
+	const { invoiceDate, customer: customerData, notes, payment } = value;
+	let { mode, paidAmount, transactionId } = payment;
 	let { invoiceNumber } = value;
 	const linesReq = value.lines;
 
@@ -255,7 +250,8 @@ const createSale = asyncHandler(async (req, res, next) => {
 		invoiceNumber,
 		customerData,
 		notes,
-		linesReq
+		linesReq,
+		payment
 	);
 
 	// REMOVED: const session = await mongoose.startSession();
@@ -316,6 +312,7 @@ const createSale = asyncHandler(async (req, res, next) => {
 						customerCode,
 						organizations: [organizationId],
 						createdBy: userId,
+						updatedBy: userId,
 					});
 
 					// also add in the organization model new customer
@@ -323,6 +320,16 @@ const createSale = asyncHandler(async (req, res, next) => {
 
 					organization.customers.push(customerDoc._id);
 					await organization.save();
+				} else {
+					// Update here only name email postalcode city state and address only
+					customerDoc.name = name;
+					customerDoc.email = email || "";
+					customerDoc.postalCode = postalCode || "";
+					customerDoc.city = city || "";
+					customerDoc.state = state || "";
+					customerDoc.address = address || "";
+					await customerDoc.save();
+					console.log("Updated Details ✅✅", customerDoc);
 				}
 			}
 		}
@@ -618,6 +625,8 @@ const createSale = asyncHandler(async (req, res, next) => {
 				productId: product._id,
 				productName: product.name,
 				productType: productTypeLabel,
+				productCode: product.code,
+				sku: product.sku,
 				baseUnitId,
 				saleUnitId,
 				quantity,
@@ -637,15 +646,19 @@ const createSale = asyncHandler(async (req, res, next) => {
 			});
 		}
 
-		// 3) Create SalesInvoice document
-		// Changed to create(obj) which returns the object directly
 		const saleDoc = await SalesInvoiceModel.create({
 			organizationId,
 			invoiceNumber,
 			invoiceDate: now,
+			customerId,
 			customerName,
 			customerCode,
 			notes,
+			payment: {
+				mode,
+				paidAmount,
+				transactionId,
+			},
 			lines: salesLines,
 			totalGross,
 			totalDiscount,
@@ -656,12 +669,26 @@ const createSale = asyncHandler(async (req, res, next) => {
 			createdBy: userId,
 		});
 
-		console.log("✅ Created Sales Doc ==>", saleDoc);
+		// here we need to send all the details by populating the organization and customerId
+		const populatedSaleDoc = await SalesInvoiceModel.findById(saleDoc._id)
+			.populate(
+				"customerId",
+				"name phoneNo email address city state postalCode"
+			)
+			.populate(
+				"organizationId",
+				"legalName registrationNumber email phone address city state postalCode"
+			)
+			.lean();
+
+		console.log("✅ Created Sales Doc ==>", populatedSaleDoc);
 
 		res.status(201).json({
 			success: true,
-			data: saleDoc,
+			data: populatedSaleDoc,
 		});
+
+		console.log("✅ Created Sales Doc ==>", populatedSaleDoc);
 	} catch (err) {
 		console.error("Error in createSale:", err);
 		return next(
@@ -718,13 +745,41 @@ const listSales = asyncHandler(async (req, res, next) => {
 
 	const skip = (Number(page) - 1) * Number(limit);
 
-	const [sales, total] = await Promise.all([
+	const result = await Promise.all([
 		SalesInvoiceModel.find(query)
 			.sort({ invoiceDate: -1 })
 			.skip(skip)
-			.limit(Number(limit)),
+			.limit(Number(limit))
+			.populate([
+				// 1. Populate items in the 'lines' array.
+				// Since 'lines' is an array of subdocuments, the path 'lines.productId'
+				// correctly targets the 'productId' field within each subdocument.
+				// {
+				// 	path: "lines.productId",
+				// 	select: "name sku baseUnit saleUnit -_id", // Fields from the Product model
+				// },
+
+				// 2. Populate the Customer document.
+				{
+					path: "customerId",
+					select: "name phoneNo email address city state postalCode -_id", // Fields from the Customer model
+				},
+
+				// 3. Populate the Organization document.
+				{
+					path: "organizationId",
+					// Fields from the Organization model
+					select:
+						"legalName registrationNumber email phone address city state postalCode -_id",
+				},
+			]),
+
 		SalesInvoiceModel.countDocuments(query),
 	]);
+
+	// console.log("✅✅Sales &&& Total ✅✅", result);
+
+	const [sales, total] = result;
 
 	res.json({
 		success: true,
@@ -744,7 +799,14 @@ const getSaleInvoice = asyncHandler(async (req, res, next) => {
 	const sale = await SalesInvoiceModel.findOne({
 		_id: saleId,
 		organizationId,
-	}).populate("lines.productId", "name sku baseUnit saleUnit");
+	})
+		.populate("lines.productId", "name sku baseUnit saleUnit")
+		.populate("customerId", "name phoneNo email address")
+		.populate(
+			"organizationId", // This line was previously the 'select' string, which Mongoose treats as the 'path' if no other path is specified, leading to an error.
+			"legalName registrationNumber email phone address city state postalCode "
+		)
+		.lean();
 
 	if (!sale) {
 		return next(new ErrorResponse("Sale invoice not found", 404));

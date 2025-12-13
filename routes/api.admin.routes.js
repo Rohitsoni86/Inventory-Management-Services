@@ -24,7 +24,10 @@ const {
 	updateCategory,
 	deleteCategory,
 } = require("../controllers/categoryController");
-const { verifyOrganizationJWT } = require("../middlewares/verifyJWT");
+const {
+	verifyOrganizationJWT,
+	verifyAdminJWT,
+} = require("../middlewares/verifyJWT");
 const { measuringUnitSchema } = require("../models/measuringUnitsModel");
 const { ProductTypeSchema } = require("../models/productType");
 const { taxSchema } = require("../models/taxModel");
@@ -77,12 +80,18 @@ const {
 	updateProduct,
 	deleteProduct,
 } = require("../controllers/productController");
-const { createNewOrganizationUser } = require("../controllers/userController");
+const {
+	createNewOrganizationUser,
+	getOrganizationAndUser,
+	updateOrganizationAndUser,
+} = require("../controllers/userController");
 
 const adminRouter = express.Router();
 
-// Handle users creation
+// Handle user
+adminRouter.get("/", verifyAdminJWT, getOrganizationAndUser);
 adminRouter.post("/create/user", createNewOrganizationUser);
+adminRouter.put("/update/user", verifyAdminJWT, updateOrganizationAndUser);
 
 // Category Routes
 adminRouter.post("/create/category", createCategory);
@@ -90,7 +99,7 @@ adminRouter.get(
 	"/get/category",
 	advanceResults(categorySchema, "Category", {
 		searchFields: ["name", "description", "status"],
-		selectableFields: "name description status createdAt", // Default fields to select
+		selectableFields: "name description status createdAt",
 	}),
 	getCategories
 );

@@ -44,7 +44,7 @@ const registerSchema = Joi.object({
 		confirmPassword: Joi.string().min(8).optional(),
 		countryCode: Joi.string().required(),
 		flagCode: Joi.string().max(2).required(),
-		gender: Joi.string().optional(),
+		gender: Joi.string().optional().allow(""),
 		phone: Joi.string()
 			.pattern(/^\d{10,15}$/)
 			.required(),

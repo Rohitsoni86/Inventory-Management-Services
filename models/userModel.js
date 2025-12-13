@@ -38,7 +38,6 @@ const UserSchema = new mongoose.Schema(
 		},
 		gender: {
 			type: String,
-			enum: Object.values(GENDER),
 		},
 		email: {
 			type: String,
@@ -149,6 +148,22 @@ const UserSchema = new mongoose.Schema(
 		],
 		refreshToken: {
 			type: String,
+		},
+		updatedAt: {
+			type: Date,
+			default: Date.now,
+		},
+		createdAt: {
+			type: Date,
+			default: Date.now,
+		},
+		updatedBy: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: "User",
+		},
+		createdBy: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: "User",
 		},
 	},
 	{

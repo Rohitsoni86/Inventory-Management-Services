@@ -1,5 +1,8 @@
 const express = require("express");
-const { verifyOrganizationJWT } = require("../middlewares/verifyJWT");
+const {
+	verifyOrganizationJWT,
+	verifyAdminJWT,
+} = require("../middlewares/verifyJWT");
 const router = express.Router();
 
 router.get("/check", (req, res) => {
@@ -9,7 +12,7 @@ router.get("/check", (req, res) => {
 router.use("/user", require("./user"));
 router.use(
 	"/organization/admin",
-	verifyOrganizationJWT,
+	verifyAdminJWT,
 	require("./api.admin.routes")
 );
 // router.use("/admin", require("./api.superAdmin.routes"));

@@ -12,6 +12,8 @@ const SalesLineSchema = new Schema(
 		// Snapshot fields (for history even if product changes later)
 		productName: { type: String, required: true },
 		productType: { type: String }, // "STANDARD" | "BATCHED" | "SERIALIZED" | etc.
+		productCode: { type: String },
+		sku: { type: String },
 
 		// Units
 		baseUnitId: { type: Schema.Types.ObjectId, ref: "Unit", required: true }, // product.baseUnit
@@ -69,7 +71,15 @@ const SalesInvoiceSchema = new Schema(
 		customerCode: { type: String },
 
 		notes: { type: String },
-
+		payment: {
+			mode: {
+				type: String,
+				default: "Cash",
+			},
+			paidAmount: { type: Number, default: 0 },
+			transactionId: { type: String },
+			paymentDate: { type: Date, default: Date.now },
+		},
 		status: {
 			type: String,
 			enum: ["DRAFT", "CONFIRMED", "CANCELLED"],
