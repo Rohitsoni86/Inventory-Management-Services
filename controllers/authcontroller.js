@@ -423,7 +423,7 @@ const RefreshUserToken = async (req, res, next) => {
 };
 
 const VerifyUserAuth = asyncHandler(async (req, res, next) => {
-	const { id } = req.user; // Assuming `id` is set by the token or middleware
+	const { id } = req.user;
 	const organizationId = req.organizationId;
 	const token = req.cookies.accessToken;
 
@@ -432,7 +432,6 @@ const VerifyUserAuth = asyncHandler(async (req, res, next) => {
 		return res.status(403).json({ success: false, message: "Invalid Token" });
 	}
 
-	// Find the user by ID, first checking if the user is a SuperAdmin or Admin
 	let user;
 
 	console.log("Founded User ==>", req.user, organizationId);

@@ -13,6 +13,8 @@ const { SerialModel } = require("../models/productSerialsModel");
 const {
 	StandardInventoryProductModel,
 } = require("../models/standardProductModel");
+const { safeUploadProductImage } = require("../utils/safeProductImageUpload");
+const { replaceProductImage } = require("../utils/replaceProductImage");
 
 const convertDateFormat = (dateString) => {
 	if (!dateString) return null;
@@ -231,6 +233,14 @@ const createProduct = asyncHandler(async (req, res, next) => {
 		delete productData.batches;
 		delete productData.serials;
 		delete productData.openingStockQty;
+		delete productData._id;
+		delete productData.id;
+
+		// Remove image base64 from product document
+		delete productData.frontImageBase64;
+		delete productData.backImageBase64;
+		delete productData.frontImagetype;
+		delete productData.backImagetype;
 
 		// Initialize
 		productData.totalQuantity = 0;
@@ -249,6 +259,45 @@ const createProduct = asyncHandler(async (req, res, next) => {
 
 		// Handle Opening Stock
 		await processOpeningStock(product, value);
+
+		const folder = `inventory/products/${product.productType}/${product._id}`;
+
+		console.log("handling the images ==>", folder, value);
+
+		const frontImage = await safeUploadProductImage({
+			base64: value.frontImageBase64,
+			extension: value.frontImagetype
+				? value.frontImagetype.split("/")[1]
+				: null,
+			folder,
+			publicId: "front",
+		});
+
+		const backImage = await safeUploadProductImage({
+			base64: value.backImageBase64,
+			extension: value.backImagetype ? value.backImagetype.split("/")[1] : null,
+			folder,
+			publicId: "back",
+		});
+
+		if (frontImage) {
+			product.frontImageUrl = frontImage.url;
+			product.frontImagePublicId = frontImage.publicId;
+			product.frontImageType = value.frontImagetype;
+		}
+
+		if (backImage) {
+			product.backImageUrl = backImage.url;
+			product.backImagePublicId = backImage.publicId;
+			product.backImageType = value.backImagetype;
+		}
+
+		console.log("handling the images ==>", folder, value);
+
+		// Save only if something changed
+		if (frontImage || backImage) {
+			await product.save();
+		}
 
 		res.status(201).json({ success: true, data: product });
 	} catch (err) {
@@ -337,39 +386,8 @@ const updateProduct = asyncHandler(async (req, res, next) => {
 
 	console.log("Received Values ==>", payload);
 
-	// If productType changed, you might want to merge defaults (similar to create)
-	if (payload.productType) {
-		const pt = await ProductType.findOne({
-			$or: [{ key: payload.productType }, { name: payload.productType }],
-		});
-		if (pt && pt.defaults) {
-			payload.allowBundling =
-				payload.allowBundling !== undefined
-					? payload.allowBundling
-					: pt.defaults.allowBundling;
-			payload.allowFractionalQty =
-				payload.allowFractionalQty !== undefined
-					? payload.allowFractionalQty
-					: pt.defaults.allowFractionalQty;
-			payload.hasVariants =
-				payload.hasVariants !== undefined
-					? payload.hasVariants
-					: pt.defaults.hasVariants;
-			payload.trackInventory =
-				payload.trackInventory !== undefined
-					? payload.trackInventory
-					: pt.defaults.trackInventory;
-			payload.trackBatches =
-				payload.trackBatches !== undefined
-					? payload.trackBatches
-					: pt.defaults.trackBatches;
-			payload.trackSerials =
-				payload.trackSerials !== undefined
-					? payload.trackSerials
-					: pt.defaults.trackSerials;
-			payload.productTypeCode = pt.code || payload.productTypeCode;
-		}
-	}
+	const product = await Product.findById(id);
+	if (!product) return next(new ErrorResponse("Product not found", 404));
 
 	if (
 		req.body.totalQuantity ||
@@ -384,6 +402,35 @@ const updateProduct = asyncHandler(async (req, res, next) => {
 		delete req.body.serials;
 	}
 
+	const frontImage = await replaceProductImage({
+		product,
+		base64: payload.frontImageBase64,
+		extension: payload.frontImagetype
+			? payload.frontImagetype.split("/")[1]
+			: null,
+		imageType: "front",
+	});
+
+	const backImage = await replaceProductImage({
+		product,
+		base64: payload.backImageBase64,
+		extension: payload.backImagetype
+			? payload.backImagetype.split("/")[1]
+			: null,
+		imageType: "back",
+	});
+
+	console.log("🔺🔺 Uploaded Image Details", frontImage, backImage);
+
+	// Capture types before delete
+	const frontImageType = payload.frontImagetype;
+	const backImageType = payload.backImagetype;
+
+	delete payload.frontImageBase64;
+	delete payload.backImageBase64;
+	delete payload.frontImagetype;
+	delete payload.backImagetype;
+
 	try {
 		// allow to edit only specific fields
 		const allowedUpdates = [
@@ -397,13 +444,13 @@ const updateProduct = asyncHandler(async (req, res, next) => {
 			"saleUnit",
 			"purchaseUnit",
 			"hasExpiryDate",
-			"productType",
-			"allowBundling",
+			// "productType",
+			// "allowBundling",
 			"allowFractionalQty",
-			"hasVariants",
-			"trackInventory",
-			"trackBatches",
-			"trackSerials",
+			// "hasVariants",
+			// "trackInventory",
+			// "trackBatches",
+			// "trackSerials",
 			"productAvailability",
 			"reorderPoint",
 			"reorderQty",
@@ -414,12 +461,27 @@ const updateProduct = asyncHandler(async (req, res, next) => {
 			"frontImageType",
 			"backImageType",
 			"active",
+			"frontImagePublicId",
+			"backImagePublicId",
 		];
+
 		let updates = {};
 		for (const key of allowedUpdates) {
 			if (payload[key] !== undefined) {
 				updates[key] = payload[key];
 			}
+		}
+
+		// Manually inject image updates if they exist
+		if (frontImage) {
+			updates.frontImageUrl = frontImage.url;
+			updates.frontImagePublicId = frontImage.publicId;
+			updates.frontImageType = frontImageType;
+		}
+		if (backImage) {
+			updates.backImageUrl = backImage.url;
+			updates.backImagePublicId = backImage.publicId;
+			updates.backImageType = backImageType;
 		}
 
 		if (Object.keys(updates).length === 0) {

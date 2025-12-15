@@ -111,6 +111,10 @@ const searchPOSProducts = asyncHandler(async (req, res) => {
 		trackSerials: 1,
 		productAvailability: 1,
 		hasExpiryDate: 1,
+		frontImageUrl: 1,
+		backImageUrl: 1,
+		frontImagePublicId: 1,
+		backImagePublicId: 1,
 	})
 		.populate("baseUnit", "name shortName")
 		.populate("saleUnit", "name shortName")
@@ -120,6 +124,8 @@ const searchPOSProducts = asyncHandler(async (req, res) => {
 
 		.limit(Number(limit))
 		.lean();
+
+	console.log("Product Found ==>", products);
 
 	const result = [];
 
@@ -135,6 +141,8 @@ const searchPOSProducts = asyncHandler(async (req, res) => {
 				.sort({ expiryDate: 1 })
 				.limit(10)
 				.lean();
+
+			console.log("Product batches Found ==>", batches);
 		}
 
 		if (p.trackSerials) {
@@ -197,6 +205,10 @@ const searchPOSProducts = asyncHandler(async (req, res) => {
 			timeSensitivity: {
 				soonToExpire,
 				expiresInDays,
+			},
+			images: {
+				frontImageUrl: p.frontImageUrl,
+				backImageUrl: p.backImageUrl,
 			},
 		});
 	}

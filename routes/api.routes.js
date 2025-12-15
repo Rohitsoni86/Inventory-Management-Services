@@ -10,6 +10,11 @@ router.get("/check", (req, res) => {
 });
 
 router.use("/user", require("./user"));
+// router.use(
+// 	"/organization/supper-admin",
+// 	verifyAdminJWT,
+// 	require("./api.supperAdmin.routes")
+// );
 router.use(
 	"/organization/admin",
 	verifyAdminJWT,

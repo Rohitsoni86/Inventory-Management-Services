@@ -63,16 +63,17 @@ const verifyOrganizationJWT = (req, res, next) => {
 				console.log(err);
 				return res.status(403).json({ message: "Forbidden" });
 			}
-			// check for only admin and manager roles
+			// check for only admin and manager and emp roles
 			if (
 				!decoded.UserInfo.roles.includes("admin") &&
-				!decoded.UserInfo.roles.includes("manager")
+				!decoded.UserInfo.roles.includes("manager") &&
+				!decoded.UserInfo.roles.includes("employee")
 			) {
 				return res
 					.status(403)
 					.json({ message: "Not authorized to access this route" });
 			}
-			console.log("Verify JWT Token Data Values ==>", decoded);
+			// console.log("Verify JWT Token Data Values ==>", decoded);
 			req.user = decoded.UserInfo;
 			req.roles = decoded.UserInfo.roles;
 			req.organizationId = decoded.organizationId;

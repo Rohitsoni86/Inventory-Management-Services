@@ -50,7 +50,9 @@ const ProductSchema = new Schema(
 
 		// images (store urls or file refs)
 		frontImageUrl: { type: String, default: "" },
+		frontImagePublicId: { type: String, default: "" },
 		backImageUrl: { type: String, default: "" },
+		backImagePublicId: { type: String, default: "" },
 		frontImageType: { type: String },
 		backImageType: { type: String },
 

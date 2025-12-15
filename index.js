@@ -11,7 +11,8 @@ const router = require("./routes/api.routes");
 const errorHandler = require("./middlewares/error");
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "1.5mb" }));
+app.use(express.urlencoded({ limit: "1.5mb", extended: true }));
 // Cookie parser
 app.use(cookieParser());
 
