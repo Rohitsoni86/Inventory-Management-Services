@@ -10,7 +10,7 @@ const bcrypt = require("bcrypt");
 const mongoose = require("mongoose");
 const { default: axios } = require("axios");
 const dotenv = require("dotenv");
-dotenv.config({ path: "../config/config.env" });
+dotenv.config();
 const CryptoJS = require("crypto-js");
 const speakeasy = require("speakeasy");
 const qrcode = require("qrcode");

@@ -8,7 +8,7 @@ const bcrypt = require("bcrypt");
 const { default: mongoose } = require("mongoose");
 const { default: axios } = require("axios");
 const dotenv = require("dotenv");
-dotenv.config({ path: "../config/config.env" });
+dotenv.config();
 const CryptoJS = require("crypto-js");
 const jwt = require("jsonwebtoken");
 const logger = require("../middlewares/custom-logger");

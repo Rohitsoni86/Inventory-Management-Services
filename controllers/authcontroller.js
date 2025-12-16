@@ -8,7 +8,7 @@ const bcrypt = require("bcrypt");
 const { default: mongoose } = require("mongoose");
 const { default: axios } = require("axios");
 const dotenv = require("dotenv");
-dotenv.config({ path: "../config/config.env" });
+dotenv.config();
 const CryptoJS = require("crypto-js");
 const jwt = require("jsonwebtoken");
 const logger = require("../middlewares/custom-logger");
@@ -17,6 +17,7 @@ const speakeasy = require("speakeasy");
 const qrcode = require("qrcode");
 const Joi = require("joi");
 const createAttributesForOrgFromGroupedFile = require("../utils/createAtrributesMasters");
+const { sendOTPEmail } = require("../utils/emailServices");
 
 const registerSchema = Joi.object({
 	legalName: Joi.string().min(2).required(),
@@ -551,6 +552,123 @@ const ResetPassword = asyncHandler(async (req, res, next) => {
 	});
 });
 
+const ForgotPassword = asyncHandler(async (req, res, next) => {
+	const { email } = req.body;
+	if (!email) {
+		return next(new ErrorResponse("Email is required", 400));
+	}
+	const user = await User.findOne({ email });
+	if (!user) {
+		return next(new ErrorResponse("User not found", 404));
+	}
+
+	// Generate 6 digit OTP
+	const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+	const salt = await bcryptjs.genSalt(10);
+	const hashedOtp = await bcryptjs.hash(otp, salt);
+
+	user.resetPasswordOtp = hashedOtp;
+	user.resetPasswordOtpExpire = Date.now() + 10 * 60 * 1000;
+
+	await user.save();
+
+	try {
+		await sendOTPEmail(email, otp);
+		res.status(200).json({
+			success: true,
+			message: "OTP sent to your email",
+		});
+	} catch (error) {
+		user.resetPasswordOtp = "";
+		user.resetPasswordOtpExpire = "";
+		await user.save();
+		return next(new ErrorResponse("Email could not be sent", 500));
+	}
+});
+
+const VerifyForgotPasswordOTP = asyncHandler(async (req, res, next) => {
+	const { email, otp } = req.body;
+	if (!email || !otp) {
+		return next(new ErrorResponse("Email and OTP are required", 400));
+	}
+
+	const user = await User.findOne({
+		email,
+		resetPasswordOtpExpire: { $gt: Date.now() },
+	});
+
+	if (!user) {
+		return next(new ErrorResponse("Invalid OTP or Email", 400));
+	}
+
+	const isMatch = await bcryptjs.compare(otp, user.resetPasswordOtp);
+	if (!isMatch) {
+		return next(new ErrorResponse("Invalid OTP", 400));
+	}
+
+	user.resetPasswordOtp = "";
+	user.resetPasswordOtpExpire = "";
+	await user.save();
+
+	const resetToken = jwt.sign(
+		{ id: user._id, scope: "reset_password" },
+		process.env.ACCESS_TOKEN_SECRET,
+		{ expiresIn: "15m" }
+	);
+
+	// setIn cookies
+	res.cookie("resetToken", resetToken, {
+		httpOnly: true,
+		secure: true,
+		sameSite: "None",
+		maxAge: 15 * 60 * 1000,
+	});
+
+	res.status(200).json({
+		success: true,
+		resetToken,
+		message: "OTP Verified Successfully",
+	});
+});
+
+const ResetPasswordWithToken = asyncHandler(async (req, res, next) => {
+	const { resetToken, newPassword, confirmPassword } = req.body;
+
+	if (!resetToken || !newPassword || !confirmPassword) {
+		return next(new ErrorResponse("All fields are required", 400));
+	}
+
+	if (newPassword !== confirmPassword) {
+		return next(new ErrorResponse("Passwords do not match", 400));
+	}
+
+	let decoded;
+	try {
+		decoded = jwt.verify(resetToken, process.env.ACCESS_TOKEN_SECRET);
+	} catch (err) {
+		return next(new ErrorResponse("Invalid or expired token", 400));
+	}
+
+	if (decoded.scope !== "reset_password") {
+		return next(new ErrorResponse("Invalid token scope", 400));
+	}
+
+	const user = await User.findById(decoded.id);
+	if (!user) {
+		return next(new ErrorResponse("User not found", 404));
+	}
+
+	const hashedPwd = await bcryptjs.hash(newPassword, 10);
+	user.password = hashedPwd;
+	await user.save();
+
+	res.status(200).json({
+		success: true,
+		message: "Password updated successfully",
+	});
+});
+
 module.exports = {
 	SignUp,
 	LoginUser,
@@ -558,4 +676,7 @@ module.exports = {
 	RefreshUserToken,
 	VerifyUserAuth,
 	ResetPassword,
+	ForgotPassword,
+	VerifyForgotPasswordOTP,
+	ResetPasswordWithToken,
 };

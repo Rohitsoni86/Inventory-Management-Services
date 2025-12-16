@@ -9,6 +9,9 @@ const {
 	VerifyUserMFA,
 	VerifyUserAuth,
 	ResetPassword,
+	ForgotPassword,
+	VerifyForgotPasswordOTP,
+	ResetPasswordWithToken,
 } = require("../controllers/authcontroller");
 const loginLimiter = require("../middlewares/loginLimiter");
 
@@ -21,6 +24,14 @@ userRouter.post(
 	"/organization/user/verify-MFA",
 	verifyTemporaryToken,
 	VerifyUserMFA
+);
+
+// Forgot Password Flow
+userRouter.post("/organization/forgot-password", ForgotPassword);
+userRouter.post("/organization/verify-otp", VerifyForgotPasswordOTP);
+userRouter.post(
+	"/organization/reset-password-with-token",
+	ResetPasswordWithToken
 );
 
 userRouter.use(verifyOrganizationJWT);

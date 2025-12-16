@@ -149,6 +149,12 @@ const UserSchema = new mongoose.Schema(
 		refreshToken: {
 			type: String,
 		},
+		resetPasswordOtpExpire: {
+			type: Date,
+		},
+		resetPasswordOtp: {
+			type: String,
+		},
 		updatedAt: {
 			type: Date,
 			default: Date.now,

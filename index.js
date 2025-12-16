@@ -5,7 +5,7 @@ const morgan = require("morgan");
 const helmet = require("helmet");
 const connectDB = require("./config/db");
 const cookieParser = require("cookie-parser");
-dotenv.config();
+// dotenv.config();
 const apiRoutes = require("./routes/api.routes");
 const router = require("./routes/api.routes");
 const errorHandler = require("./middlewares/error");
