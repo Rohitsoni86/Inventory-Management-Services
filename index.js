@@ -43,6 +43,8 @@ const corsOptions = {
 		"http://localhost:3000",
 		"http://localhost:3001",
 		"http://localhost:4000",
+		"https://inventory-management-v1-virid.vercel.app",
+		"https://inventory-management-v1-virid.vercel.app/",
 	],
 	methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 	allowedHeaders: [
