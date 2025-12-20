@@ -232,4 +232,6 @@ adminRouter.get("/get/products", listProducts);
 adminRouter.put("/update/product/:id", updateProduct);
 adminRouter.delete("/delete/product/:id", deleteProduct);
 
+// Dashboard Summary or Dashboard Analysis Apis
+
 module.exports = adminRouter;

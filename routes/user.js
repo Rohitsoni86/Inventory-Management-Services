@@ -18,7 +18,7 @@ const loginLimiter = require("../middlewares/loginLimiter");
 const userRouter = express.Router();
 
 // authentication
-userRouter.route("/organization/signup").post(SignUp);
+userRouter.route("/organization/signup", loginLimiter).post(SignUp);
 userRouter.route("/organization/login", loginLimiter).post(LoginUser);
 userRouter.post(
 	"/organization/user/verify-MFA",

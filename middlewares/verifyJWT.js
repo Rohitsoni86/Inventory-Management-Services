@@ -99,7 +99,10 @@ const verifyAdminJWT = (req, res, next) => {
 			}
 
 			// Check if the role is admin
-			if (!decoded.UserInfo.roles.includes("admin")) {
+			if (
+				!decoded.UserInfo.roles.includes("admin") &&
+				!decoded.UserInfo.roles.includes("manager")
+			) {
 				return res
 					.status(403)
 					.json({ message: "Not authorized to access this route" });
