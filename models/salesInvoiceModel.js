@@ -9,7 +9,6 @@ const SalesLineSchema = new Schema(
 			required: true,
 		},
 
-		// Snapshot fields (for history even if product changes later)
 		productName: { type: String, required: true },
 		productType: { type: String }, // "STANDARD" | "BATCHED" | "SERIALIZED" | etc.
 		productCode: { type: String },

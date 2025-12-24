@@ -73,15 +73,15 @@ const StandardInventoryProductSchema = new Schema(
 		currentQuantity: {
 			type: Number,
 			required: true,
-			validate: {
-				validator: function (value) {
-					if (value > this.initialQuantity) {
-						return false;
-					}
-					return true;
-				},
-				message: "Current Quantity cannot exceed Initial Quantity.",
-			},
+			// validate: {
+			// 	validator: function (value) {
+			// 		if (value > this.initialQuantity) {
+			// 			return false;
+			// 		}
+			// 		return true;
+			// 	},
+			// 	message: "Current Quantity cannot exceed Initial Quantity.",
+			// },
 		},
 
 		createdBy: {

@@ -116,9 +116,9 @@ const searchPOSProducts = asyncHandler(async (req, res) => {
 		frontImagePublicId: 1,
 		backImagePublicId: 1,
 	})
-		.populate("baseUnit", "name shortName")
-		.populate("saleUnit", "name shortName")
-		.populate("purchaseUnit", "name shortName")
+		.populate("baseUnit")
+		.populate("saleUnit")
+		.populate("purchaseUnit")
 		.populate("category", "name")
 		.populate("brand", "name")
 
@@ -274,7 +274,7 @@ const createSale = asyncHandler(async (req, res, next) => {
 			invoiceNumber = await generateInvoiceNumber(organizationId);
 		}
 
-		// --- Customer Handling ---
+		// Customer Handling
 		let customerDoc = null;
 		if (customerData) {
 			if (typeof customerData === "string") {
@@ -349,7 +349,6 @@ const createSale = asyncHandler(async (req, res, next) => {
 		const customerId = customerDoc ? customerDoc._id : null;
 		const customerName = customerDoc ? customerDoc.name : "Walk-in Customer";
 		const customerCode = customerDoc ? customerDoc.customerCode : null;
-		// --- End Customer Handling ---
 
 		const now = invoiceDate ? new Date(invoiceDate) : new Date();
 
@@ -361,18 +360,18 @@ const createSale = asyncHandler(async (req, res, next) => {
 		let totalCost = 0;
 		let totalProfit = 0;
 
-		// 2) Process each line
+		// Process each line
 		for (const line of linesReq) {
 			const { productId, unitId: saleUnitId, quantity } = line;
 			const batchId = line.batchId;
 			const serialIds = line.serialNumbers || [];
 
-			// 2.a) Load product
+			// Load product
 			const product = await Product.findOne({
 				_id: productId,
 				organizationId,
 				active: true,
-			}); // Removed .session(session)
+			});
 
 			if (!product) {
 				throw new ErrorResponse("Product not found or inactive", 404);
@@ -384,7 +383,7 @@ const createSale = asyncHandler(async (req, res, next) => {
 
 			const baseUnitId = product.baseUnit;
 
-			// 2.b) Convert sale qty to base qty
+			// Convert sale qty to base qty
 			const quantityBase = await convertToBaseUnit(
 				quantity,
 				saleUnitId,
@@ -691,6 +690,8 @@ const createSale = asyncHandler(async (req, res, next) => {
 				"organizationId",
 				"legalName registrationNumber email phone address city state postalCode"
 			)
+			.populate("lines.saleUnitId", "name shortName")
+			.populate("lines.baseUnitId", "name shortName")
 			.lean();
 
 		console.log("✅ Created Sales Doc ==>", populatedSaleDoc);
@@ -762,6 +763,9 @@ const listSales = asyncHandler(async (req, res, next) => {
 			.sort({ invoiceDate: -1 })
 			.skip(skip)
 			.limit(Number(limit))
+			// .populate("saleUnitId", "name shortName")
+			// .populate("baseUnitId", "name shortName")
+			// .populate("purchaseUnitId", "name shortName")
 			.populate([
 				// 1. Populate items in the 'lines' array.
 				// Since 'lines' is an array of subdocuments, the path 'lines.productId'
@@ -814,6 +818,8 @@ const getSaleInvoice = asyncHandler(async (req, res, next) => {
 	})
 		.populate("lines.productId", "name sku baseUnit saleUnit")
 		.populate("customerId", "name phoneNo email address")
+		.populate("lines.saleUnitId", "name shortName")
+		.populate("lines.baseUnitId", "name shortName")
 		.populate(
 			"organizationId", // This line was previously the 'select' string, which Mongoose treats as the 'path' if no other path is specified, leading to an error.
 			"legalName registrationNumber email phone address city state postalCode "

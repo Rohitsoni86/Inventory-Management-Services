@@ -127,8 +127,9 @@ adminRouter.post("/create/unit-family", createUnitFamily);
 adminRouter.get(
 	"/get/unit-families",
 	advanceResults(unitFamilySchema, "UnitFamily", {
-		searchFields: ["name", "shortName", "description", "status"],
-		selectableFields: "name shortName description status createdAt",
+		searchFields: ["name", "shortName", "description", "status", "baseUnit"],
+		selectableFields: "name shortName description status createdAt baseUnit",
+		populate: ["baseUnit"],
 	}),
 	getUnitFamilies
 );

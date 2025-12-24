@@ -37,6 +37,7 @@ const serialSchema = Joi.object({
 	sellPrice: Joi.number().min(0).allow(null),
 	costPrice: Joi.number().min(0).allow(null),
 	expiryDate: Joi.string().allow(null, ""),
+	taxRate: Joi.number().min(0).allow(null, "", 0),
 });
 
 const createProductSchema = Joi.object({

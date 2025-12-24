@@ -109,7 +109,7 @@ const processOpeningStock = async (product, payload) => {
 			serialNumber: s.serial,
 			costPrice: Number(s.costPrice || openingStockCost), // Fallback to general cost
 			sellPrice: Number(s.sellPrice),
-			taxRate: Number(s.taxRate),
+			taxRate: Number(s.taxRate) || product.taxRate || 0,
 			status: "AVAILABLE",
 			currentLocation: s.locationId,
 			createdBy: createdBy,
