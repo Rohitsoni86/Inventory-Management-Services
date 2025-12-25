@@ -23,7 +23,10 @@ const createUnitFamily = asyncHandler(async (req, res, next) => {
 		);
 	}
 
-	const unitFamilyExists = await UnitFamily.findOne({ name });
+	const unitFamilyExists = await UnitFamily.findOne({
+		name,
+		organizations: organizationId,
+	});
 	if (unitFamilyExists) {
 		return next(
 			new ErrorResponse("Unit family with this name already exists", 400)
