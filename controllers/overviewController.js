@@ -70,10 +70,10 @@ exports.getDashboardCardsData = asyncHandler(async (req, res, next) => {
 			{
 				$project: {
 					_id: 0,
-					totalSales: 1,
-					totalPurchase: 1,
-					netProfit: 1,
-					totalTax: 1,
+					totalSales: { $round: ["$totalSales", 2] },
+					totalPurchase: { $round: ["$totalPurchase", 2] },
+					netProfit: { $round: ["$netProfit", 2] },
+					totalTax: { $round: ["$totalTax", 2] },
 				},
 			},
 		]),
@@ -189,6 +189,15 @@ exports.getDashboardChartData = asyncHandler(async (req, res, next) => {
 			},
 		},
 		{
+			$project: {
+				_id: 1,
+				totalSales: { $round: ["$totalSales", 2] },
+				totalPurchase: { $round: ["$totalPurchase", 2] },
+				netProfit: { $round: ["$netProfit", 2] },
+				totalTax: { $round: ["$totalTax", 2] },
+			},
+		},
+		{
 			$sort: { _id: 1 },
 		},
 	]);
@@ -276,7 +285,7 @@ exports.getTopCategories = asyncHandler(async (req, res, next) => {
 			$project: {
 				_id: "$categories.categoryId",
 				name: "$categories.name",
-				totalSales: "$categories.totalSales",
+				totalSales: { $round: ["$categories.totalSales", 2] },
 				percentage: {
 					$cond: [
 						{ $eq: ["$grandTotal", 0] },
@@ -289,7 +298,7 @@ exports.getTopCategories = asyncHandler(async (req, res, next) => {
 										100,
 									],
 								},
-								1,
+								2,
 							],
 						},
 					],
@@ -380,6 +389,13 @@ exports.getFinancialOverview = asyncHandler(async (req, res, next) => {
 				},
 				totalIncome: { $sum: "$totalAmount" },
 				totalExpense: { $sum: "$totalCost" },
+			},
+		},
+		{
+			$project: {
+				_id: 1,
+				totalIncome: { $round: ["$totalIncome", 2] },
+				totalExpense: { $round: ["$totalExpense", 2] },
 			},
 		},
 		{
@@ -504,7 +520,7 @@ exports.getTopSellingProducts = asyncHandler(async (req, res, next) => {
 				name: "$productDetails.name",
 				sku: "$productDetails.sku",
 				totalQuantitySold: "$totalQuantitySold",
-				totalSales: "$totalSales",
+				totalSales: { $round: ["$totalSales", 2] },
 			},
 		},
 	]);
@@ -553,13 +569,25 @@ exports.getRecentSales = asyncHandler(async (req, res, next) => {
 		limit = 10;
 	}
 
-	const recentSales = await SalesInvoiceModel.find({
-		organizationId: new mongoose.Types.ObjectId(organizationId),
-		status: "CONFIRMED",
-	})
-		.sort({ invoiceDate: -1 })
-		.limit(limit)
-		.select("invoiceNumber customerName invoiceDate totalAmount");
+	const recentSales = await SalesInvoiceModel.aggregate([
+		{
+			$match: {
+				organizationId: new mongoose.Types.ObjectId(organizationId),
+				status: "CONFIRMED",
+			},
+		},
+		{ $sort: { invoiceDate: -1 } },
+		{ $limit: limit },
+		{
+			$project: {
+				_id: 1,
+				invoiceNumber: 1,
+				customerName: 1,
+				invoiceDate: 1,
+				totalAmount: { $round: ["$totalAmount", 2] },
+			},
+		},
+	]);
 
 	res.status(200).json({
 		success: true,
@@ -943,7 +971,7 @@ exports.getPaymentModeSummary = asyncHandler(async (req, res, next) => {
 		},
 		{
 			$group: {
-				_id: "$paymentMode",
+				_id: "$payment.mode",
 				totalAmount: { $sum: "$totalAmount" },
 			},
 		},
@@ -951,7 +979,7 @@ exports.getPaymentModeSummary = asyncHandler(async (req, res, next) => {
 			$project: {
 				_id: 0,
 				mode: "$_id",
-				totalAmount: 1,
+				totalAmount: { $round: ["$totalAmount", 2] },
 			},
 		},
 		{
