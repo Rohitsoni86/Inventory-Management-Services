@@ -21,7 +21,10 @@ const createTaxGroup = asyncHandler(async (req, res, next) => {
 		);
 	}
 
-	const taxGroupExists = await TaxGroup.findOne({ name });
+	const taxGroupExists = await TaxGroup.findOne({
+		name,
+		organizations: organizationId,
+	});
 	if (taxGroupExists) {
 		return next(
 			new ErrorResponse("Tax group with this name already exists", 400)

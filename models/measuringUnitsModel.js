@@ -7,7 +7,7 @@ const measuringUnitSchema = new mongoose.Schema(
 			type: String,
 			required: true,
 			trim: true,
-			unique: true,
+			// unique: true,
 			minlength: 1,
 			maxlength: 50,
 		},
@@ -16,12 +16,11 @@ const measuringUnitSchema = new mongoose.Schema(
 			type: String,
 			required: true,
 			trim: true,
-			unique: true,
+			// unique: true,
 			minlength: 1,
 			maxlength: 10,
 		},
 		family: {
-			// 'Kilogram'
 			type: mongoose.Schema.Types.ObjectId,
 			ref: "UnitFamily",
 			required: true,

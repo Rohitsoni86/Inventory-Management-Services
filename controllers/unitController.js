@@ -20,14 +20,36 @@ const createUnit = asyncHandler(async (req, res, next) => {
 		);
 	}
 
-	const unitExists = await MeasuringUnit.findOne({ name });
+	if (!family?._id) {
+		return next(new ErrorResponse("A unit must belong to a family.", 400));
+	}
+
+	const unitExists = await MeasuringUnit.findOne({
+		name,
+		organizations: organizationId,
+	});
 	if (unitExists) {
 		return next(new ErrorResponse("Unit with this name already exists", 400));
 	}
 
-	try {
-		let familyUnitID = new mongoose.Types.ObjectId(family?._id);
+	const familyUnitID = new mongoose.Types.ObjectId(family._id);
+	const unitFamily = await UnitFamily.findById(familyUnitID);
 
+	if (!unitFamily) {
+		return next(new ErrorResponse(`Unit Family not found`, 404));
+	}
+
+	// Check if a base unit is being created and if the family already has one.
+	if (isBase && unitFamily.baseUnit) {
+		return next(
+			new ErrorResponse(
+				`Unit family '${unitFamily.name}' already has a base unit. Only one base unit is allowed per family.`,
+				400
+			)
+		);
+	}
+
+	try {
 		const unit = await MeasuringUnit.create({
 			name,
 			shortName,
@@ -40,13 +62,6 @@ const createUnit = asyncHandler(async (req, res, next) => {
 		});
 
 		// Here we need to update the Unit Family for Base unit
-
-		const unitFamily = await UnitFamily.findById(familyUnitID);
-
-		if (!unitFamily) {
-			return next(new ErrorResponse(`Unit Family not found`, 404));
-		}
-
 		if (unit.isBase) {
 			unitFamily.baseUnit = unit._id;
 			await unitFamily.save();
@@ -119,17 +134,11 @@ const getUnitById = asyncHandler(async (req, res, next) => {
 // @route PUT /api/admin/update/units/:id
 // @access Private (Admin)
 const updateUnit = asyncHandler(async (req, res, next) => {
-	const { name, shortName, description, status } = req.body;
+	const { name, shortName, description, status, isBase, multiplierToBase } =
+		req.body;
+	const organizationId = req.organizationId;
 
 	try {
-		// Build unit object
-		const unitFields = {};
-		if (name) unitFields.name = name;
-		if (shortName) unitFields.shortName = shortName;
-		if (description) unitFields.description = description;
-		if (status) unitFields.status = status;
-		unitFields.updatedBy = req.user.id;
-
 		let unit = await MeasuringUnit.findById(req.params.id);
 
 		if (!unit) {
@@ -138,20 +147,70 @@ const updateUnit = asyncHandler(async (req, res, next) => {
 			);
 		}
 
+		// If name is being changed, check for uniqueness within the organization
+		if (name && name !== unit.name) {
+			const unitExists = await MeasuringUnit.findOne({
+				name,
+				organizations: organizationId,
+				_id: { $ne: req.params.id },
+			});
+			if (unitExists) {
+				return next(
+					new ErrorResponse("Another unit with this name already exists", 400)
+				);
+			}
+		}
+
+		const unitFields = { updatedBy: req.user.id };
+		if (name) unitFields.name = name;
+		if (shortName) unitFields.shortName = shortName;
+		if (description) unitFields.description = description;
+		if (status) unitFields.status = status;
+		if (isBase !== undefined) unitFields.isBase = isBase;
+		if (multiplierToBase !== undefined)
+			unitFields.multiplierToBase = multiplierToBase;
+
+		// Handle base unit logic if `isBase` is being changed
+		if (isBase !== undefined && isBase !== unit.isBase) {
+			const unitFamily = await UnitFamily.findById(unit.family);
+			if (!unitFamily) {
+				return next(new ErrorResponse(`Associated Unit Family not found`, 404));
+			}
+
+			if (isBase === true) {
+				// Trying to make this the new base unit
+				if (
+					unitFamily.baseUnit &&
+					unitFamily.baseUnit.toString() !== unit._id.toString()
+				) {
+					return next(
+						new ErrorResponse(
+							`Unit family '${unitFamily.name}' already has a base unit. Cannot set another.`,
+							400
+						)
+					);
+				}
+				// A base unit must have a multiplier of 1.
+				unitFields.multiplierToBase = 1;
+				unitFamily.baseUnit = unit._id;
+				await unitFamily.save();
+			} else {
+				// isBase is false, trying to remove this as a base unit
+				if (
+					unitFamily.baseUnit &&
+					unitFamily.baseUnit.toString() === unit._id.toString()
+				) {
+					unitFamily.baseUnit = null;
+					await unitFamily.save();
+				}
+			}
+		}
+
 		unit = await MeasuringUnit.findByIdAndUpdate(
 			req.params.id,
 			{ $set: unitFields },
 			{ new: true, runValidators: true }
 		);
-		// await logChange({
-		// 	tenantDb,
-		// 	collectionName: "--",
-		// 	documentId: id,
-		// 	operation: "update",
-		// 	oldData: oldDoc,
-		// 	newData: updatedDoc.toObject(),
-		// 	modifiedBy: req.user,
-		// });
 
 		res.status(200).json({
 			success: true,

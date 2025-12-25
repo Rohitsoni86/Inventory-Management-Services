@@ -29,7 +29,11 @@ const createProductType = asyncHandler(async (req, res, next) => {
 		);
 	}
 
-	const productTypeExists = await ProductType.findOne({ name });
+	const productTypeExists = await ProductType.findOne({
+		name,
+		organizations: organizationId,
+	});
+
 	if (productTypeExists) {
 		return next(
 			new ErrorResponse("Product type with this name already exists", 400)

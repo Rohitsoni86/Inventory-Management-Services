@@ -10,7 +10,7 @@ const taxSchema = new mongoose.Schema(
 			type: String,
 			required: true,
 			trim: true,
-			unique: true,
+			// unique: true,
 			minlength: 2,
 			maxlength: 50,
 		},
@@ -24,13 +24,6 @@ const taxSchema = new mongoose.Schema(
 			type: String,
 			default: "percentage",
 		},
-
-		// // 1. Internal field: Stores the actual UTC Date (hidden from default output)
-		// _effectiveFrom: {
-		// 	type: Date,
-		// 	required: true,
-		// 	select: false, // Hides this field when using .find() or .findOne()
-		// },
 
 		// 2. Virtual field: Used for I/O and validation
 		effectiveFrom: {
@@ -62,7 +55,6 @@ const taxSchema = new mongoose.Schema(
 				return istTimeString;
 			},
 
-			// --- OUTPUT (Getter) ---
 			get: function (istTimeString) {
 				// When reading, use the stored UTC date to generate the formatted string
 				if (this._effectiveFrom) {

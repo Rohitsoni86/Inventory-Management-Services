@@ -14,7 +14,10 @@ const createBrand = asyncHandler(async (req, res, next) => {
 		return next(new ErrorResponse("Brand name is required", 400));
 	}
 
-	const brandExists = await Brand.findOne({ name });
+	const brandExists = await Brand.findOne({
+		name,
+		organizations: organizationId,
+	});
 	if (brandExists) {
 		return next(new ErrorResponse("Brand with this name already exists", 400));
 	}

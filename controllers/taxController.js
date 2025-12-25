@@ -17,7 +17,7 @@ const createTax = asyncHandler(async (req, res, next) => {
 		);
 	}
 
-	const taxExists = await Tax.findOne({ name });
+	const taxExists = await Tax.findOne({ name, organizations: organizationId });
 	if (taxExists) {
 		return next(new ErrorResponse("Tax with this name already exists", 400));
 	}

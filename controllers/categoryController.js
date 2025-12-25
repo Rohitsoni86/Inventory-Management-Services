@@ -15,7 +15,10 @@ const createCategory = asyncHandler(async (req, res, next) => {
 		return next(new ErrorResponse("Category name is required", 400));
 	}
 
-	const Exists = await ProductCategory.findOne({ name });
+	const Exists = await ProductCategory.findOne({
+		name,
+		organizations: organizationId,
+	});
 	if (Exists) {
 		return next(
 			new ErrorResponse("Category with this name already exists", 400)

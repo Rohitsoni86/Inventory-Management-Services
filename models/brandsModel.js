@@ -9,7 +9,7 @@ const brandSchema = new mongoose.Schema(
 			type: String,
 			required: true,
 			trim: true,
-			unique: true,
+			// unique: true,
 			minlength: 2,
 			maxlength: 50,
 		},
