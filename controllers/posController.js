@@ -272,6 +272,17 @@ const createSale = asyncHandler(async (req, res, next) => {
 	try {
 		if (!invoiceNumber || invoiceNumber.trim() === "") {
 			invoiceNumber = await generateInvoiceNumber(organizationId);
+		} else {
+			const existingInvoice = await SalesInvoiceModel.findOne({
+				invoiceNumber,
+				organizationId,
+			}).session(session);
+			if (existingInvoice) {
+				throw new ErrorResponse(
+					`Invoice number '${invoiceNumber}' already exists.`,
+					409
+				);
+			}
 		}
 
 		// Customer Handling
