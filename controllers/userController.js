@@ -32,7 +32,7 @@ const userCreationValidationSchema = Joi.object({
 		.optional()
 		.items(Joi.string().valid("admin", "manager", "employee")),
 	honorific: Joi.string().optional().allow(""),
-	middleName: Joi.string().min(2).max(50).optional(),
+	middleName: Joi.string().min(2).max(50).allow("").optional(),
 	countryCode: Joi.string()
 		.pattern(/^\+?[1-9]\d{1,14}$/)
 		.optional(),
